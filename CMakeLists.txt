@@ -37,6 +37,7 @@ set(SOURCES
     src/core/DeviceModel.cpp
     src/core/ScenarioDispatcher.cpp
     src/ui/MainWindow.cpp
+    src/ui/StepItemWidget.cpp
 
     # Шаг 2 — WhoIAm
     # src/network/WhoIAmScanner.cpp

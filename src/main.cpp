@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QStyleFactory>
+#include <QPalette>
 
 #include "core/IScenarioDispatcher.h"
 #include "core/ScenarioDispatcher.h"
@@ -7,101 +8,46 @@
 #include "core/Logger.h"
 #include "ui/MainWindow.h"
 
-// ─────────────────────────────────────────────────────────────────────────────
-/// Фабрика шагов сценария — полный список проверок МСВ.
-///
-/// Шаг 1: заглушки (StepType::Automatic → executeStep stub).
-/// Реальные реализации подключаются в Шагах 2–5.
-// ─────────────────────────────────────────────────────────────────────────────
 static QList<Msv::Core::StepDescriptor> buildScenarioSteps()
 {
     using namespace Msv::Core;
     return {
-        // ── Шаг 2: Обнаружение изделия ───────────────────────────────────────
-        {
-            0, StepType::Automatic,
-            "Поиск МСВ (WhoIAm)",
-            "Автоматический широковещательный запрос WhoIAm.\n"
-            "Ожидается ответ от изделия в сети.",
-            30
-        },
-        // ── Шаг 3a: Web-статус ───────────────────────────────────────────────
-        {
-            1, StepType::Automatic,
-            "Чтение Web-статуса",
-            "HTTP-запрос к Web-интерфейсу изделия.\n"
-            "Проверяется: источник синхронизации, статус, Web-время.",
-            15
-        },
-        // ── Шаг 3b: SNTP-проверка ────────────────────────────────────────────
-        {
-            2, StepType::Automatic,
-            "SNTP-запрос к изделию",
-            "UDP-запрос к SNTP-серверу изделия (порт 123).\n"
-            "Проверяется: LI, Stratum, время ответа.",
-            15
-        },
-        // ── Шаг 4: Подключение UART-дубликата ────────────────────────────────
-        {
-            3, StepType::OperatorAction,
-            "Подключить UART-дубликат",
-            "Подключите кабель UART-дубликата GNSS-выхода изделия к COM-порту ПК.\n"
-            "После подключения нажмите «Выполнено».",
-            0  // без таймаута
-        },
-        // ── Шаг 4b: Мониторинг NMEA ──────────────────────────────────────────
-        {
-            4, StepType::Automatic,
-            "Мониторинг NMEA (UART)",
-            "Пассивное чтение NMEA-потока GNSS-приёмника изделия.\n"
-            "Проверяется: checksum RMC/GGA, монотонность UTC.",
-            60
-        },
-        // ── Шаг 5a: Отключение штатной антенны ───────────────────────────────
-        {
-            5, StepType::OperatorAction,
-            "Отключить штатную антенну",
-            "Отключите штатную GNSS-антенну от изделия.\n"
-            "Подключите имитатор КЗ на антенный разъём.\n"
-            "После замены нажмите «Выполнено».",
-            0
-        },
-        // ── Шаг 5b: Фиксация состояния КЗ ────────────────────────────────────
-        {
-            6, StepType::Automatic,
-            "Мониторинг состояния при КЗ",
-            "Автоматическая фиксация состояния изделия (Web + SNTP + UART)\n"
-            "при закороченной антенне. Длительность: 60 с.",
-            90
-        },
-        // ── Шаг 5c: Восстановление штатной антенны ───────────────────────────
-        {
-            7, StepType::OperatorAction,
-            "Восстановить штатную антенну",
-            "Отключите имитатор КЗ.\n"
-            "Подключите штатную GNSS-антенну.\n"
-            "После восстановления нажмите «Выполнено».",
-            0
-        },
-        // ── Шаг 5d: Восстановление синхронизации ─────────────────────────────
-        {
-            8, StepType::Automatic,
-            "Ожидание восстановления GNSS",
-            "Ожидание повторного захвата спутников и восстановления\n"
-            "синхронизации после замены антенны.",
-            300
-        },
-        // ── Шаг 6: Формирование протокола ────────────────────────────────────
-        {
-            9, StepType::Automatic,
-            "Формирование итогового протокола",
-            "Автоматическая генерация протокола проверки в файл.",
-            10
-        },
+        {0, StepType::Automatic,      "Поиск МСВ (WhoIAm)",           "Автоматический широковещательный запрос WhoIAm.\nОжидается ответ от изделия в сети.", 30},
+        {1, StepType::Automatic,      "Чтение Web-статуса",            "HTTP-запрос к Web-интерфейсу изделия.\nПроверяется: источник синхронизации, статус, Web-время.", 15},
+        {2, StepType::Automatic,      "SNTP-запрос к изделию",         "UDP-запрос к SNTP-серверу изделия (порт 123).\nПроверяется: LI, Stratum, время ответа.", 15},
+        {3, StepType::OperatorAction, "Подключить UART-дубликат",      "Подключите кабель UART-дубликата GNSS-выхода изделия к COM-порту ПК.\nПосле подключения нажмите «ВЫПОЛНЕНО».", 0},
+        {4, StepType::Automatic,      "Мониторинг NMEA (UART)",        "Пассивное чтение NMEA-потока GNSS-приёмника изделия.\nПроверяется: checksum RMC/GGA, монотонность UTC.", 60},
+        {5, StepType::OperatorAction, "Отключить штатную антенну",     "Отключите штатную GNSS-антенну от изделия.\nПодключите имитатор КЗ на антенный разъём.\nПосле замены нажмите «ВЫПОЛНЕНО».", 0},
+        {6, StepType::Automatic,      "Мониторинг состояния при КЗ",   "Автоматическая фиксация состояния изделия (Web + SNTP + UART)\nпри закороченной антенне. Длительность: 60 с.", 90},
+        {7, StepType::OperatorAction, "Восстановить штатную антенну",  "Отключите имитатор КЗ.\nПодключите штатную GNSS-антенну.\nПосле восстановления нажмите «ВЫПОЛНЕНО».", 0},
+        {8, StepType::Automatic,      "Ожидание восстановления GNSS",  "Ожидание повторного захвата спутников и восстановления\nсинхронизации после замены антенны.", 300},
+        {9, StepType::Automatic,      "Формирование протокола",        "Автоматическая генерация протокола проверки в файл.", 10},
     };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+static void applyDarkPalette(QApplication& app)
+{
+    app.setStyle(QStyleFactory::create("Fusion"));
+
+    QPalette p;
+    p.setColor(QPalette::Window,         QColor(0x14, 0x14, 0x14));
+    p.setColor(QPalette::WindowText,      QColor(0xd8, 0xd8, 0xd8));
+    p.setColor(QPalette::Base,            QColor(0x0e, 0x0e, 0x0e));
+    p.setColor(QPalette::AlternateBase,   QColor(0x1c, 0x1c, 0x1c));
+    p.setColor(QPalette::Text,            QColor(0xd8, 0xd8, 0xd8));
+    p.setColor(QPalette::BrightText,      Qt::white);
+    p.setColor(QPalette::Button,          QColor(0x1e, 0x1e, 0x1e));
+    p.setColor(QPalette::ButtonText,      QColor(0xd8, 0xd8, 0xd8));
+    p.setColor(QPalette::Highlight,       QColor(0x00, 0x89, 0x7b));
+    p.setColor(QPalette::HighlightedText, Qt::white);
+    p.setColor(QPalette::ToolTipBase,     QColor(0x1c, 0x1c, 0x1c));
+    p.setColor(QPalette::ToolTipText,     QColor(0xd8, 0xd8, 0xd8));
+    p.setColor(QPalette::PlaceholderText, QColor(0x44, 0x44, 0x44));
+    p.setColor(QPalette::Disabled, QPalette::WindowText, QColor(0x38, 0x38, 0x38));
+    p.setColor(QPalette::Disabled, QPalette::Text,       QColor(0x38, 0x38, 0x38));
+    p.setColor(QPalette::Disabled, QPalette::ButtonText, QColor(0x38, 0x38, 0x38));
+    app.setPalette(p);
+}
 
 int main(int argc, char* argv[])
 {
@@ -110,39 +56,29 @@ int main(int argc, char* argv[])
     app.setApplicationVersion("0.1.0");
     app.setOrganizationName("Lab");
 
-    // ── Тёмная тема (опционально) ─────────────────────────────────────────────
-    // app.setStyle(QStyleFactory::create("Fusion"));
+    applyDarkPalette(app);
 
-    // ── Слой Model ────────────────────────────────────────────────────────────
+    // ── Model ─────────────────────────────────────────────────────────────────
     auto deviceModel = std::make_unique<Msv::Core::DeviceModel>();
 
-    // ── Логгер: консоль + файл + модель для UI ────────────────────────────────
+    // ── Logger ────────────────────────────────────────────────────────────────
     auto compositeLogger = std::make_shared<Msv::Core::CompositeLogger>();
     compositeLogger->addBackend(std::make_unique<Msv::Core::ConsoleLogBackend>());
     compositeLogger->addBackend(std::make_unique<Msv::Core::FileLogBackend>("msv_session.log"));
 
-    // ModelLogBackend живёт отдельно — его указатель нужен и диспетчеру, и MainWindow
     auto logModel = std::make_unique<Msv::Core::ModelLogBackend>();
-    // Добавляем в составной логгер (CompositeLogger берёт владение копией через unique_ptr)
-    // ВАЖНО: сохраняем raw-ptr до передачи владения
     Msv::Core::ModelLogBackend* logModelPtr = logModel.get();
     compositeLogger->addBackend(std::move(logModel));
 
-    // ── Слой Controller ───────────────────────────────────────────────────────
+    // ── Controller ────────────────────────────────────────────────────────────
     auto dispatcher = std::make_unique<Msv::Core::ScenarioDispatcher>(
-        buildScenarioSteps(),
-        compositeLogger
+        buildScenarioSteps(), compositeLogger
     );
 
-    // ── Слой View ─────────────────────────────────────────────────────────────
-    Msv::Ui::MainWindow window(
-        dispatcher.get(),
-        deviceModel.get(),
-        logModelPtr
-    );
+    // ── View ──────────────────────────────────────────────────────────────────
+    Msv::Ui::MainWindow window(dispatcher.get(), deviceModel.get(), logModelPtr);
     window.show();
 
     compositeLogger->info("main", "Приложение запущено");
-
     return app.exec();
 }

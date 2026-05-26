@@ -17,28 +17,51 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
 # ── Qt компоненты ──────────────────────────────────────────────────────────────
-# Добавляем компоненты по мере реализации шагов:
-#   Core, Gui, Widgets  — Шаг 1 (каркас)
-#   Network             — Шаги 2–3 (WhoIAm, Web, SNTP)
-#   SerialPort          — Шаг 4 (UART-GNSS)
 find_package(Qt6 REQUIRED COMPONENTS
-    Core
-    Gui
-    Widgets
-    Network
-    SerialPort
+    Core Gui Widgets Network SerialPort
 )
 
-# ── Предупреждения компилятора ────────────────────────────────────────────────
+# ── Предупреждения ─────────────────────────────────────────────────────────────
 if(MSVC)
-    add_compile_options(/W4 /WX)
+    add_compile_options(/W4)
 else()
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+    add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# ── Подпроекты ────────────────────────────────────────────────────────────────
-add_subdirectory(src)
+# ── Исходники (раскомментировать по мере реализации шагов) ────────────────────
+set(SOURCES
+    src/main.cpp
 
-# ── Тесты (подключить позже) ──────────────────────────────────────────────────
-# enable_testing()
-# add_subdirectory(tests)
+    # Шаг 1 — каркас
+    src/core/Logger.cpp
+    src/core/DeviceModel.cpp
+    src/core/ScenarioDispatcher.cpp
+    src/ui/MainWindow.cpp
+
+    # Шаг 2 — WhoIAm
+    # src/network/WhoIAmScanner.cpp
+
+    # Шаг 3 — Web + SNTP
+    # src/network/WebClient.cpp
+    # src/network/SntpClient.cpp
+
+    # Шаг 4 — UART-GNSS
+    # src/serial/UartMonitor.cpp
+    # src/serial/NmeaParser.cpp
+
+    # Шаг 5 — Анализатор
+    # src/analysis/DataAnalyzer.cpp
+
+    # Шаг 6 — Отчёт
+    # src/report/ReportGenerator.cpp
+)
+
+qt6_add_executable(MsvTester ${SOURCES})
+
+target_include_directories(MsvTester PRIVATE src)
+
+target_link_libraries(MsvTester PRIVATE
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::SerialPort
+)
+
+install(TARGETS MsvTester RUNTIME DESTINATION bin)

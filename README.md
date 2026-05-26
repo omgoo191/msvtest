@@ -1,93 +1,80 @@
-# RU.РПНЦ.60300
+# МСВ Тестер
 
+Стендовое программное обеспечение для проверки **модуля синхронизации времени (МСВ)**.
 
+---
 
-## Getting started
+## Зачем это нужно
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+МСВ — это устройство, которое синхронизирует время по спутнику (GNSS) и раздаёт точное время другим системам по сети (через протокол SNTP, как обычный NTP-сервер).
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+Перед выпуском изделия его нужно проверить: правильно ли оно синхронизируется, корректно ли отвечает на запросы, и что с ним происходит при нештатных ситуациях — например, при намеренном коротком замыкании антенного разъёма.
 
-## Add your files
+Делать это вручную — долго, неудобно и легко ошибиться. **МСВ Тестер** проводит оператора по заранее утверждённому сценарию шаг за шагом, сам собирает данные с изделия и в конце формирует протокол проверки.
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+---
 
-```
-cd existing_repo
-git remote add origin http://gl.energy.encore.ru/GRPO/sources/projects/desktop_apps/RU.RPNC.60300.git
-git branch -M main
-git push -uf origin main
-```
+## Главный принцип
 
-## Integrate with your tools
+Программа **не управляет** изделием и **не вмешивается** в его работу.
 
-* [Set up project integrations](http://gl.energy.encore.ru/GRPO/sources/projects/desktop_apps/RU.RPNC.60300/-/settings/integrations)
+Она только:
+- **наблюдает** — читает данные с сети и UART,
+- **фиксирует** — записывает всё с метками времени,
+- **ведёт оператора** — говорит что нужно сделать руками.
 
-## Collaborate with your team
+Физические действия (подать питание, переключить антенну, подключить кабель) всегда выполняет **человек**. Программа лишь ждёт подтверждения и продолжает.
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+> UART подключается только к дублирующему (пассивному) выходу изделия.
+> Рабочий UART изделия не трогается никогда.
 
-## Test and Deploy
+---
 
-Use the built-in continuous integration in GitLab.
+## Что проверяется
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+Сценарий проверки состоит из 10 шагов:
 
-***
+| № | Что происходит | Кто делает |
+|---|----------------|------------|
+| 1 | Поиск МСВ в сети (WhoIAm) | программа |
+| 2 | Чтение статуса через Web-интерфейс | программа |
+| 3 | SNTP-запрос к изделию, проверка времени и stratum | программа |
+| 4 | Подключение UART-дубликата к ПК | **оператор** |
+| 5 | Чтение NMEA-потока GNSS, проверка контрольных сумм и монотонности времени | программа |
+| 6 | Отключение штатной антенны, подключение имитатора КЗ | **оператор** |
+| 7 | Мониторинг состояния изделия при закороченной антенне | программа |
+| 8 | Восстановление штатной антенны | **оператор** |
+| 9 | Ожидание повторного захвата спутников и восстановления синхронизации | программа |
+| 10 | Формирование итогового протокола проверки | программа |
 
-# Editing this README
+По результатам каждый шаг получает оценку **PASS / FAIL / WARNING**.
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+---
 
-## Suggestions for a good README
+## Как выглядит работа оператора
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+1. Запускаешь программу.
+2. Нажимаешь **«Запустить»**.
+3. Первые три шага программа проходит сама — видишь зелёные PASS в левой панели.
+4. На шагах где нужно что-то сделать руками — программа останавливается и показывает инструкцию крупным текстом по центру экрана.
+5. Выполнил действие — нажал **«Выполнено»** — программа продолжила.
+6. В конце — итоговый протокол в файл.
 
-## Name
-Choose a self-explaining name for your project.
+Всё время снизу идёт живой журнал событий с метками времени — можно видеть что именно делает программа в каждый момент.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+---
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+## Что фиксируется в протоколе
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+- Дата и время проверки
+- Идентификатор изделия (IP, MAC, версия ПО, серийный номер)
+- Результат каждого шага (PASS / FAIL / WARNING) с подробностями
+- Временны́е метки всех действий оператора
+- Сравнение времён: GNSS (UART) vs SNTP vs Web vs системные часы ПК
+- Итоговая оценка: **ГОДЕН / НЕ ГОДЕН**
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+---
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+## Что если изделие не найдено автоматически
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Если программа не обнаружила МСВ в сети при автоматическом сканировании — появится диалог с просьбой ввести IP-адрес вручную. Сценарий продолжится, шаг получит оценку **WARNING** (найдено вручную, а не автоматически).

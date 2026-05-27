@@ -11,8 +11,8 @@ StepItemWidget::StepItemWidget(int index,
     : QFrame(parent)
     , m_index(index)
 {
-    setFixedHeight(54);
-    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+	setMinimumHeight(54);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 
     auto* layout = new QHBoxLayout(this);
     layout->setContentsMargins(12, 0, 12, 0);
@@ -29,6 +29,7 @@ StepItemWidget::StepItemWidget(int index,
 
     m_title = new QLabel(desc.title, this);
     m_title->setObjectName("stepTitle");
+	m_title->setWordWrap(true);
 
     const QString typeStr = (desc.type == Core::StepType::Automatic)
         ? "автоматически"
@@ -108,13 +109,13 @@ void StepItemWidget::refresh()
     }
 
     m_circle->setText(cs.text);
+	m_circle->setStyleSheet(QStringLiteral(" font-size: %1pt;").arg(m_index >= 9 ? 7 : 9));
     m_circle->setStyleSheet(QStringLiteral(
         "QLabel {"
         "  background-color: %1;"
         "  color: %2;"
         "  border-radius: 14px;"
         "  font-weight: bold;"
-        "  font-size: 9pt;"
         "  font-family: 'JetBrains Mono', 'Consolas', monospace;"
         "}"
     ).arg(cs.bg, cs.fg));

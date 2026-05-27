@@ -72,7 +72,7 @@ void MainWindow::applyTheme()
 
         /* ── Панели / карточки ── */
         QFrame#topBar {
-            background-color: #0e0e0e;
+            background-color: transparent;
             border-bottom: 1px solid #2a2a2a;
         }
         QFrame#stepsPanel {
@@ -237,65 +237,73 @@ void MainWindow::buildUi()
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
 
-    // ════════════════════════════════════════════════════════════════════════
-    // TOP BAR
-    // ════════════════════════════════════════════════════════════════════════
-    {
-        auto* bar = new QFrame(central);
-        bar->setObjectName("topBar");
-        bar->setFixedHeight(56);
-        auto* barLayout = new QHBoxLayout(bar);
-        barLayout->setContentsMargins(20, 0, 20, 0);
-        barLayout->setSpacing(0);
+	// ════════════════════════════════════════════════════════════════════════
+	// TOP BAR
+	// ════════════════════════════════════════════════════════════════════════
+	{
+		auto* bar = new QFrame(central);
+		bar->setObjectName("topBar");
+		bar->setFixedHeight(56);
+		auto* barLayout = new QHBoxLayout(bar);
+		barLayout->setContentsMargins(20, 0, 20, 0);
+		barLayout->setSpacing(0);
 
-        // Логотип / название
-        auto* appName = new QLabel("МСВ ТЕСТЕР", bar);
-        appName->setStyleSheet(
-            "color: #00e5cc;"
-            "font-size: 12pt;"
-            "font-weight: bold;"
-            "letter-spacing: 3px;"
-            "font-family: 'JetBrains Mono', 'Consolas', monospace;"
-        );
+		// Логотип / название
+		auto* appName = new QLabel("МСВ ТЕСТЕР", bar);
+		appName->setStyleSheet(
+				"color: #00e5cc;"
+				"font-size: 12pt;"
+				"font-weight: bold;"
+				"letter-spacing: 3px;"
+				"font-family: 'JetBrains Mono', 'Consolas', monospace;"
+		);
 
-        auto* version = new QLabel("  v0.1", bar);
-        version->setStyleSheet("color: #303030; font-size: 9pt;");
+		auto* version = new QLabel("  v0.1", bar);
+		version->setStyleSheet("color: #303030; font-size: 9pt;");
 
-        // Разделитель
-        auto* sep1 = new QFrame(bar);
-        sep1->setFrameShape(QFrame::VLine);
-        sep1->setStyleSheet("color: #282828;");
+		// Данные устройства
+		m_deviceLabel = new QLabel("устройство не обнаружено", bar);
+		m_deviceLabel->setStyleSheet(
+				"color: #484848;"
+				"font-size: 9pt;"
+				"font-family: 'JetBrains Mono', 'Consolas', monospace;"
+		);
 
-        // Данные устройства
-        m_deviceLabel = new QLabel("устройство не обнаружено", bar);
-        m_deviceLabel->setStyleSheet(
-            "color: #484848;"
-            "font-size: 9pt;"
-            "font-family: 'JetBrains Mono', 'Consolas', monospace;"
-        );
+		// Добавляем виджеты в layout с явным выравниванием по центру вертикали (Qt::AlignVCenter)
+		barLayout->addWidget(appName, 0, Qt::AlignVCenter);
+		barLayout->addWidget(version, 0, Qt::AlignVCenter);
+		barLayout->addSpacing(24);
+		barLayout->addWidget(m_deviceLabel, 1, Qt::AlignVCenter); // Растягивается (stretch: 1)
 
-        barLayout->addWidget(appName);
-        barLayout->addWidget(version);
-        barLayout->addSpacing(24);
-        barLayout->addWidget(sep1);
-        barLayout->addSpacing(24);
-        barLayout->addWidget(m_deviceLabel, 1);
+		// Статус-индикатор (справа)
+		m_statusDot  = new QLabel(bar);
+		m_statusDot->setFixedSize(8, 8);
+		m_statusText = new QLabel("ГОТОВ", bar);
 
-        // Статус-индикатор (справа)
-        m_statusDot  = new QLabel("●", bar);
-        m_statusText = new QLabel("ГОТОВ", bar);
-        m_statusDot ->setStyleSheet("color: #303030; font-size: 14pt;");
-        m_statusText->setStyleSheet(
-            "color: #404040;"
-            "font-size: 8pt;"
-            "font-weight: bold;"
-            "letter-spacing: 2px;"
-        );
-        barLayout->addWidget(m_statusDot);
-        barLayout->addSpacing(6);
-        barLayout->addWidget(m_statusText);
+		// Стартовый цвет делаем через background-color
+		m_statusDot->setStyleSheet("background-color: #303030; border-radius: 4px;");
+		m_statusText->setStyleSheet(
+				"color: #404040;"
+				"font-size: 8pt;"
+				"font-weight: bold;"
+				"letter-spacing: 2px;"
+		);
 
-        rootLayout->addWidget(bar);
+		// Кружок и текст статуса тоже выравниваем по центру вертикали
+		barLayout->addWidget(m_statusDot, 0, Qt::AlignVCenter);
+		barLayout->addSpacing(8); // Чуть увеличил отступ для красоты
+		barLayout->addWidget(m_statusText, 0, Qt::AlignVCenter);
+
+		rootLayout->addWidget(bar);
+
+		// Прогрессбар — тонкая полоска под шапкой
+		m_progressBar = new QProgressBar(central);
+		m_progressBar->setRange(0, 100);
+		m_progressBar->setValue(0);
+		m_progressBar->setTextVisible(false);
+		m_progressBar->setFixedHeight(3);
+		rootLayout->addWidget(m_progressBar);
+
 
         // Прогрессбар — тонкая полоска под шапкой
         m_progressBar = new QProgressBar(central);
@@ -323,8 +331,8 @@ void MainWindow::buildUi()
     {
         auto* stepsFrame = new QFrame(hSplit);
         stepsFrame->setObjectName("stepsPanel");
-        stepsFrame->setMinimumWidth(220);
-        stepsFrame->setMaximumWidth(320);
+        stepsFrame->setMinimumWidth(240);
+        stepsFrame->setMaximumWidth(340);
         auto* fl = new QVBoxLayout(stepsFrame);
         fl->setContentsMargins(0, 16, 0, 0);
         fl->setSpacing(0);
@@ -555,9 +563,9 @@ void MainWindow::onStateChanged(Core::DispatcherState newState)
         {S::Aborted,         {"ПРЕРВАНО",    "#f44336", "#f44336"}},
     };
     const auto& v = vis.value(newState, {"?","#303030","#404040"});
-    m_statusDot ->setStyleSheet(QStringLiteral("color: %1; font-size: 14pt;").arg(v.dotColor));
+    m_statusDot ->setStyleSheet(QStringLiteral("background-color: %1; border-radius: 4px;").arg(v.dotColor));
     m_statusText->setStyleSheet(QStringLiteral(
-        "color: %1; font-size: 8pt; font-weight: bold; letter-spacing: 2px;").arg(v.textColor));
+        "color: %1; font-size: 8pt; font-weight: bold; letter-spacing: 2px; background-color: transparent").arg(v.textColor));
     m_statusText->setText(v.text);
 
     updateButtons();
@@ -610,6 +618,7 @@ void MainWindow::onSnapshotChanged(const Core::DeviceSnapshot& snap)
         "color: #707070;"
         "font-size: 9pt;"
         "font-family: 'JetBrains Mono', 'Consolas', monospace;"
+		"background-color: transparent;"
     );
 }
 
@@ -683,7 +692,7 @@ void MainWindow::updateButtons()
 
 void MainWindow::setStatusIndicator(const QString& text, const QString& color)
 {
-    m_statusDot ->setStyleSheet(QStringLiteral("color: %1; font-size: 14pt;").arg(color));
+    m_statusDot ->setStyleSheet(QStringLiteral("background-color: %1; border-radius: 4px;").arg(color));
     m_statusText->setStyleSheet(QStringLiteral(
         "color: %1; font-size: 8pt; font-weight: bold; letter-spacing: 2px;").arg(color));
     m_statusText->setText(text);

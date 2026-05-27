@@ -62,6 +62,7 @@ private:
 
     QTimer                  m_timeoutTimer;
     std::shared_ptr<ILogger> m_logger;
+    bool                    m_stepFinishing {false};  ///< Защита от реентрантного вызова
 
     static constexpr const char* kSource = "ScenarioDispatcher";
 };

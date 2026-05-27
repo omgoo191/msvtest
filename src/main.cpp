@@ -3,7 +3,7 @@
 #include <QPalette>
 
 #include "core/IScenarioDispatcher.h"
-#include "core/ScenarioDispatcher.h"
+#include "core/MsvScenarioDispatcher.h"
 #include "core/DeviceModel.h"
 #include "core/Logger.h"
 #include "ui/MainWindow.h"
@@ -71,8 +71,16 @@ int main(int argc, char* argv[])
     compositeLogger->addBackend(std::move(logModel));
 
     // ── Controller ────────────────────────────────────────────────────────────
-    auto dispatcher = std::make_unique<Msv::Core::ScenarioDispatcher>(
-        buildScenarioSteps(), compositeLogger
+    Msv::Network::WhoIAmConfig whoIAmConfig;
+    whoIAmConfig.port            = 54321;   // порт МСВ — уточнить по документации
+    whoIAmConfig.retries         = 3;
+    whoIAmConfig.retryIntervalMs = 2000;
+
+    auto dispatcher = std::make_unique<Msv::Core::MsvScenarioDispatcher>(
+        buildScenarioSteps(),
+        compositeLogger,
+        deviceModel.get(),
+        whoIAmConfig
     );
 
     // ── View ──────────────────────────────────────────────────────────────────

@@ -1,8 +1,13 @@
 #include "MainWindow.h"
 #include "StepItemWidget.h"
 #include "core/IScenarioDispatcher.h"
+#include "core/MsvScenarioDispatcher.h"
 #include "core/IDeviceModel.h"
 #include "core/Logger.h"
+
+#include <QInputDialog>
+#include <QMessageBox>
+#include <QHostAddress>
 
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -502,6 +507,12 @@ void MainWindow::connectSignals()
 
     connect(m_logModel, &Core::ModelLogBackend::entryAdded,
             this, &MainWindow::onLogEntryAdded);
+
+    // MsvScenarioDispatcher-специфичный сигнал — подключаем через qobject_cast
+    if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher)) {
+        connect(msv, &Core::MsvScenarioDispatcher::manualIpRequired,
+                this, &MainWindow::onManualIpRequired);
+    }
 }
 
 // ── Слоты ─────────────────────────────────────────────────────────────────────
@@ -665,6 +676,42 @@ void MainWindow::setPrompt(const QString& header, const QString& body,
         "color: %1; font-size: 8pt; font-weight: bold; letter-spacing: 2px;")
         .arg(accentColor));
     m_promptBody->setText(body);
+}
+
+void MainWindow::onManualIpRequired()
+{
+    setPrompt("ТРЕБУЕТСЯ ВВОД",
+              "WhoIAm-сканирование не обнаружило МСВ.\nВведите IP-адрес изделия вручную.",
+              "#ff9800");
+
+    bool ok = false;
+    QString ip = QInputDialog::getText(
+        this,
+        tr("Устройство не найдено"),
+        tr("WhoIAm не обнаружил МСВ в сети.\n\nВведите IP-адрес изделия:"),
+        QLineEdit::Normal,
+        QStringLiteral("192.168.1."),
+        &ok
+    );
+
+    if (!ok || ip.trimmed().isEmpty()) {
+        // Оператор отменил — прерываем сценарий
+        m_dispatcher->abort();
+        return;
+    }
+
+    const QHostAddress addr(ip.trimmed());
+    if (addr.isNull() || addr == QHostAddress::Any) {
+        QMessageBox::warning(this, tr("Ошибка"),
+            tr("«%1» — неверный IP-адрес.\nПопробуйте ещё раз.").arg(ip));
+        // Повтор в следующем цикле событий (не рекурсия в стеке)
+        QMetaObject::invokeMethod(this, &MainWindow::onManualIpRequired,
+                                  Qt::QueuedConnection);
+        return;
+    }
+
+    if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher))
+        msv->provideManualIp(addr);
 }
 
 } // namespace Msv::Ui

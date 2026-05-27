@@ -141,6 +141,11 @@ void ScenarioDispatcher::executeStep(int stepIndex)
 
 void ScenarioDispatcher::finishCurrentStep(StepResult result, const QString& details)
 {
+    if (m_stepFinishing) {
+        m_logger->warning(kSource, "finishCurrentStep: повторный вызов проигнорирован");
+        return;
+    }
+    m_stepFinishing = true;
     m_results[m_currentIdx] = result;
 
     const QString tag = [&]{
@@ -160,6 +165,7 @@ void ScenarioDispatcher::finishCurrentStep(StepResult result, const QString& det
             .arg(details.isEmpty() ? QString{} : QStringLiteral(" — ") + details));
 
     emit stepFinished(m_currentIdx, result, details);
+    m_stepFinishing = false;
     advanceToStep(m_currentIdx + 1);
 }
 

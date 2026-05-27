@@ -8,6 +8,7 @@ namespace Msv::Core {
     class IScenarioDispatcher;
     class IDeviceModel;
     class ModelLogBackend;
+    class MsvScenarioDispatcher;   // для подключения manualIpRequired
     struct DeviceSnapshot;
     struct LogEntry;
     struct StepDescriptor;
@@ -49,6 +50,7 @@ private slots:
     void onSnapshotChanged  (const Core::DeviceSnapshot& snap);
     void onLogEntryAdded    (const Core::LogEntry& entry);
     void onScenarioFinished (bool overallPass);
+    void onManualIpRequired ();   ///< WhoIAm не нашёл устройство — показать диалог
 
 private:
     void buildUi();

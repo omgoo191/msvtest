@@ -32,6 +32,8 @@ public:
     void resume()                                      override;
     void confirmOperatorAction()                       override;
     void reportOperatorFailure(const QString& reason)  override;
+	void continueToNextStep() 						   override;
+	void reset()                                       override;
 
     [[nodiscard]] DispatcherState       state()            const override;
     [[nodiscard]] int                   currentStepIndex() const override;
@@ -59,6 +61,7 @@ protected:
     QList<StepResult>       m_results;
     DispatcherState         m_state      {DispatcherState::Idle};
     int                     m_currentIdx {-1};
+	int                     m_pendingNextStep {0};
 
     QTimer                  m_timeoutTimer;
     bool                    m_stepFinishing {false};

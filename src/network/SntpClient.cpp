@@ -109,7 +109,7 @@ void SntpClient::onReadyRead()
         // ── Проверка: Mode должен быть 4 (server) ───────────────────────────
         const int mode = p->li_vn_mode & 0x07;
         if (mode != 4) {
-            m_logger->warning(kSrc, QStringLiteral("Нестандартный Mode в ответе: %1 (ожидался 4), продолжаем парсинг"));
+            m_logger->warning(kSrc, QStringLiteral("Нестандартный Mode в ответе: %1 (ожидался 4), продолжаем парсинг").arg(mode));
         }
 
         // ── Извлекаем поля ───────────────────────────────────────────────────

@@ -23,6 +23,9 @@ public:
     void setActive(bool active);
     void setResult(Core::StepResult result);
 
+protected:
+	void mousePressEvent(QMouseEvent* event) override;
+
 private:
     void refresh();
 
@@ -34,6 +37,9 @@ private:
     int              m_index;
     bool             m_active {false};
     Core::StepResult m_result {Core::StepResult::NotRun};
+
+signals:
+	void clicked(int index);
 };
 
 } // namespace Msv::Ui

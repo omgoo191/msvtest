@@ -50,6 +50,7 @@ enum class DispatcherState : int {
     Paused,           ///< Приостановлен вручную
     Finished,         ///< Сценарий завершён (все шаги пройдены)
     Aborted,          ///< Прерван аварийно
+    ReviewingResult,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +76,8 @@ public:
     virtual void abort() = 0;           ///< Аварийное прерывание
     virtual void pause() = 0;           ///< Пауза перед текущим шагом
     virtual void resume() = 0;          ///< Возобновить из паузы
+	virtual void continueToNextStep() = 0; ///< оператор нажал далее
+	virtual void reset() = 0;           ///< Сброс для повтороного запуска
 
     /// Оператор нажал «Выполнено» — разрешить переход к следующему шагу.
     virtual void confirmOperatorAction() = 0;

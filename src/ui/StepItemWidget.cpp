@@ -157,4 +157,10 @@ void StepItemWidget::refresh()
     }
 }
 
+void StepItemWidget::mousePressEvent(QMouseEvent *event)
+{
+	QFrame::mousePressEvent(event);
+	emit clicked(m_index);
+}
+
 } // namespace Msv::Ui

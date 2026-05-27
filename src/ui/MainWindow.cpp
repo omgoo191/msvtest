@@ -53,6 +53,11 @@ MainWindow::MainWindow(Core::IScenarioDispatcher* dispatcher,
         m_stepItems.append(item);
         m_stepsContainer->layout()->addWidget(item);
     }
+
+	for (auto* item : m_stepItems)
+		connect(item, &StepItemWidget::clicked,
+				this, &MainWindow::onStepItemClicked);
+
     // Спейсер снизу
     qobject_cast<QVBoxLayout*>(m_stepsContainer->layout())->addStretch(1);
 }
@@ -167,6 +172,19 @@ void MainWindow::applyTheme()
         QPushButton#abortBtn:hover   { color: #f44336; border-color: #c62828; }
         QPushButton#abortBtn:pressed { background-color: #1a0000; }
         QPushButton#abortBtn:disabled { color: #2a2a2a; border-color: #222222; }
+
+        QPushButton#continueBtn {
+            background-color: #1a3a5c;
+            color: #00e5cc;
+            border: 1px solid #00e5cc;
+			min-width: 130px;
+        }
+		QPushButton#continueBtn: hover {background-color: 1e4570;}
+	    QPushButton#continueBtn: disabled {
+	  		background-color: #1a1a1a;
+            color: #2a2a2a;
+            border: 1px solid #222222;
+        }
 
         /* ── Прогрессбар ── */
         QProgressBar {
@@ -460,6 +478,11 @@ void MainWindow::buildUi()
             m_confirmBtn->setFixedHeight(40);
             m_abortBtn  ->setFixedHeight(40);
 
+			m_continueBtn = new QPushButton("ДАЛЕЕ", mainWidget);
+			m_continueBtn->setObjectName("continueBtn");
+			m_continueBtn->setFixedHeight(40);
+
+			btnRow->addWidget(m_continueBtn);
             btnRow->addWidget(m_startBtn);
             btnRow->addWidget(m_confirmBtn);
             btnRow->addStretch(1);
@@ -537,6 +560,9 @@ void MainWindow::connectSignals()
     connect(m_logModel, &Core::ModelLogBackend::entryAdded,
             this, &MainWindow::onLogEntryAdded);
 
+	connect(m_continueBtn, &QPushButton::clicked,
+			this, &MainWindow::onContinueClicked);
+
     // MsvScenarioDispatcher-специфичный сигнал — подключаем через qobject_cast
     if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher)) {
         connect(msv, &Core::MsvScenarioDispatcher::deviceSelectionRequired,
@@ -546,7 +572,20 @@ void MainWindow::connectSignals()
 
 // ── Слоты ─────────────────────────────────────────────────────────────────────
 
-void MainWindow::onStartClicked()   { m_dispatcher->start(); }
+void MainWindow::onStartClicked()
+{
+	using S = Core::DispatcherState;
+	const auto s = m_dispatcher->state();
+	if (s == S::Finished || s == S::Aborted) {
+		// Сброс UI
+		m_stepRecords.clear();
+		m_viewingStepIndex = -1;
+		for (auto* item : m_stepItems)
+			item->setResult(Core::StepResult::NotRun);
+		m_dispatcher->reset();
+	}
+	m_dispatcher->start();
+}
 void MainWindow::onConfirmClicked() { m_dispatcher->confirmOperatorAction(); }
 void MainWindow::onAbortClicked()   { m_dispatcher->abort(); }
 
@@ -561,6 +600,7 @@ void MainWindow::onStateChanged(Core::DispatcherState newState)
         {S::Paused,          {"ПАУЗА",       "#505050", "#606060"}},
         {S::Finished,        {"ЗАВЕРШЁН",    "#4caf50", "#4caf50"}},
         {S::Aborted,         {"ПРЕРВАНО",    "#f44336", "#f44336"}},
+		{S::ReviewingResult, {"Результат",   "#00e5cc", "#00e5cc"}},
     };
     const auto& v = vis.value(newState, {"?","#303030","#404040"});
     m_statusDot ->setStyleSheet(QStringLiteral("background-color: %1; border-radius: 4px;").arg(v.dotColor));
@@ -591,12 +631,34 @@ void MainWindow::onStepStarted(int idx, const Core::StepDescriptor& desc)
     // Промпт для автошагов
     if (desc.type == Core::StepType::Automatic)
         setPrompt("ВЫПОЛНЯЕТСЯ", desc.description, "#00e5cc");
+
+	StepDisplayRecord rec;
+	rec.promptHeader = (desc.type == Core::StepType::Automatic)
+					   ? "ВЫПОЛНЯЕТСЯ" : "ТРЕБУЕТСЯ ДЕЙСТВИЕ ОПЕРАТОРА";
+	rec.promptBody   = desc.description;
+	rec.accentColor  = (desc.type == Core::StepType::Automatic)
+					   ? "#00e5cc" : "#ff9800";
+
+	if (idx < m_stepRecords.size())
+		m_stepRecords[idx] = rec;
+	else
+		m_stepRecords.append(rec);
+
+	// Если смотрим live — обновить отображение
+	if (m_viewingStepIndex == -1)
+		setPrompt(rec.promptHeader, rec.promptBody, rec.accentColor);
 }
 
-void MainWindow::onStepFinished(int idx, Core::StepResult result, const QString&)
+void MainWindow::onStepFinished(int idx, Core::StepResult result, const QString& details)
 {
     if (idx < m_stepItems.size())
         m_stepItems[idx]->setResult(result);
+
+	// Обновить сохранённую запись — добавить детали результата
+	if (idx < m_stepRecords.size() && !details.isEmpty()) {
+		m_stepRecords[idx].promptBody +=
+				QStringLiteral("\n\n▸ %1").arg(details);
+	}
 }
 
 void MainWindow::onOperatorActionRequired(int, const Core::StepDescriptor& desc)
@@ -682,12 +744,20 @@ void MainWindow::onScenarioFinished(bool overallPass)
 
 void MainWindow::updateButtons()
 {
-    using S = Core::DispatcherState;
-    const auto s = m_dispatcher->state();
+	using S = Core::DispatcherState;
+	const auto s = m_dispatcher->state();
 
-    m_startBtn  ->setEnabled(s == S::Idle);
-    m_confirmBtn->setEnabled(s == S::WaitingOperator);
-    m_abortBtn  ->setEnabled(s == S::Running || s == S::WaitingOperator || s == S::Paused);
+	const bool idle      = (s == S::Idle);
+	const bool reviewing = (s == S::ReviewingResult);
+	const bool waiting   = (s == S::WaitingOperator);
+	const bool active    = (s == S::Running || reviewing || waiting);
+	const bool done      = (s == S::Finished || s == S::Aborted);
+
+	m_startBtn  ->setText(done ? "↺  ПЕРЕЗАПУСТИТЬ" : "▶   ЗАПУСТИТЬ");
+	m_startBtn  ->setEnabled(idle || done);
+	m_continueBtn->setEnabled(reviewing);
+	m_confirmBtn->setEnabled(waiting);
+	m_abortBtn  ->setEnabled(active);
 }
 
 void MainWindow::setStatusIndicator(const QString& text, const QString& color)
@@ -731,6 +801,25 @@ void MainWindow::onDeviceSelectionRequired(const Msv::Network::WhoIAmResponseLis
     }
 }
 
+void MainWindow::onContinueClicked()
+{
+	m_viewingStepIndex = -1;  // вернуться к live-виду
+	m_dispatcher->continueToNextStep();
+}
+
+void MainWindow::onStepItemClicked(int index)
+{
+	if (index >= m_stepRecords.size()) return;  // шаг ещё не запускался
+
+	m_viewingStepIndex = index;
+	const auto& rec = m_stepRecords[index];
+	setPrompt(rec.promptHeader, rec.promptBody, rec.accentColor);
+
+	// Подсветить выбранный шаг
+	for (int i = 0; i < m_stepItems.size(); ++i)
+		m_stepItems[i]->setActive(i == index &&
+		m_dispatcher->currentStepIndex() == index);
+}
 // Оставляем как заглушку на случай если понадобится напрямую
 void MainWindow::onManualIpRequired() {}
 

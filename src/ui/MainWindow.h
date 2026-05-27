@@ -52,6 +52,8 @@ private slots:
     void onScenarioFinished (bool overallPass);
     void onManualIpRequired ();
     void onDeviceSelectionRequired(const Msv::Network::WhoIAmResponseList& found);   ///< WhoIAm не нашёл устройство — показать диалог
+    void onContinueClicked();
+	void onStepItemClicked(int index);
 
 private:
     void buildUi();
@@ -90,6 +92,17 @@ private:
     Core::IScenarioDispatcher* m_dispatcher  {nullptr};
     Core::IDeviceModel*        m_deviceModel {nullptr};
     Core::ModelLogBackend*     m_logModel    {nullptr};
+
+	QPushButton* m_continueBtn {nullptr};
+
+	struct StepDisplayRecord {
+		QString promptHeader;
+		QString promptBody;
+		QString accentColor;
+	};
+
+	QList<StepDisplayRecord> m_stepRecords;
+	int                      m_viewingStepIndex {-1};
 };
 
 } // namespace Msv::Ui

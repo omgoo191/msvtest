@@ -165,8 +165,9 @@ void ScenarioDispatcher::finishCurrentStep(StepResult result, const QString& det
             .arg(details.isEmpty() ? QString{} : QStringLiteral(" — ") + details));
 
     emit stepFinished(m_currentIdx, result, details);
+	m_pendingNextStep = m_currentIdx + 1;
     m_stepFinishing = false;
-    advanceToStep(m_currentIdx + 1);
+	setState(DispatcherState::ReviewingResult);
 }
 
 void ScenarioDispatcher::onTimeoutTick()
@@ -189,6 +190,23 @@ void ScenarioDispatcher::emitProgress()
     const int total = m_steps.size();
     const int pct   = total > 0 ? (m_currentIdx * 100 / total) : 0;
     emit progressChanged(pct);
+}
+
+void ScenarioDispatcher::continueToNextStep()
+{
+	if (m_state != DispatcherState::ReviewingResult) return;
+	advanceToStep(m_pendingNextStep);
+}
+
+void ScenarioDispatcher::reset()
+{
+	m_timeoutTimer.stop();
+	m_results.fill(StepResult::NotRun);
+	m_currentIdx = -1;
+	m_pendingNextStep = 0;
+	m_stepFinishing = false;
+	setState((DispatcherState::Idle));
+	m_logger->info(kSource, "Сценарий сброшен");
 }
 
 } // namespace Msv::Core

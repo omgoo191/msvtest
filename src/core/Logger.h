@@ -2,7 +2,7 @@
 
 #include "ILogger.h"
 #include <QObject>
-#include <QList>
+#include <vector>
 #include <QMutex>
 #include <QFile>
 #include <memory>
@@ -25,7 +25,7 @@ public:
 
 private:
     QMutex                              m_mutex;
-    QList<std::unique_ptr<ILogger>>     m_backends;
+    std::vector<std::unique_ptr<ILogger>>     m_backends;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

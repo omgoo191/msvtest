@@ -4,6 +4,7 @@
 #include <QTimer>
 #include <QElapsedTimer>
 #include <QtEndian>
+#include <QTimeZone>
 
 namespace Msv::Network {
 
@@ -56,9 +57,9 @@ void SntpClient::request(const QHostAddress& ip, quint16 port, int timeoutMs)
         return;
     }
 
-    // Формируем запрос: LI=0, Version=4, Mode=3 (client) → 0b00100011 = 0x23
+    // Формируем запрос: LI=0, Version=4, Mode=3 (client) → 0b00100011 = 0x18
     NtpPacket pkt{};
-    pkt.li_vn_mode = 0x23;
+    pkt.li_vn_mode = 0x18;
 
     const qint64 sent = m_socket->writeDatagram(
         reinterpret_cast<const char*>(&pkt), sizeof(pkt), ip, port);
@@ -108,10 +109,7 @@ void SntpClient::onReadyRead()
         // ── Проверка: Mode должен быть 4 (server) ───────────────────────────
         const int mode = p->li_vn_mode & 0x07;
         if (mode != 4) {
-            const QString err = QStringLiteral("Неверный Mode в ответе: %1").arg(mode);
-            m_logger->warning(kSrc, err);
-            emit failed(err);
-            return;
+            m_logger->warning(kSrc, QStringLiteral("Нестандартный Mode в ответе: %1 (ожидался 4), продолжаем парсинг"));
         }
 
         // ── Извлекаем поля ───────────────────────────────────────────────────
@@ -131,7 +129,7 @@ void SntpClient::onReadyRead()
             (static_cast<quint64>(txFrac) * 1000ULL) >> 32);
 
         result.transmitTime = QDateTime::fromMSecsSinceEpoch(
-            static_cast<qint64>(unixSec) * 1000 + ms, Qt::UTC);
+            static_cast<qint64>(unixSec) * 1000 + ms, QTimeZone::utc());
 
         m_logger->info(kSrc, QStringLiteral(
             "SNTP ответ: time=%1  LI=%2  stratum=%3  RTT=%.1f ms")

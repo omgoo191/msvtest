@@ -3,6 +3,7 @@
 #include "IDeviceModel.h"
 #include <QMutex>
 
+
 namespace Msv::Core {
 
 class DeviceModel final : public IDeviceModel {
@@ -20,7 +21,7 @@ public:
                          const QString&      deviceName) override;
 
     void applySntpData  (const QDateTime& time, int leapIndicator, int stratum) override;
-    void applyWebStatus (SyncSource source, SyncStatus status, const QDateTime& webTime) override;
+    void applyWebStatus (const WebStatusData& data) override;
     void applyGnssTime  (const QDateTime& utcTime) override;
     void reset          () override;
 

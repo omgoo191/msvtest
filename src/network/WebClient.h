@@ -30,6 +30,22 @@ public:
         Core::SyncStatus syncStatus {Core::SyncStatus::Unknown};
         QDateTime        webTime;
         QString          rawBody;
+		QString macAddress;
+		QString gpsTime;
+		QString gpsDate;
+		QString gpsStatus;       // "st_gps"
+		QString gpsMode;
+		QString gpsSatellites;
+		QString gpsSignalLevel;
+		QString rtcTime;
+		QString rtcDate;
+		QString rtcValidity;
+		QString antennaStatus;   // "as"
+		QString lastValidGps;    // "lr"
+		QString sntpSyncCount;   // "ssn"
+		QString uptime;
+		QString buildDate;
+		QString crc;
     };
 
     explicit WebClient(std::shared_ptr<Core::ILogger> logger,

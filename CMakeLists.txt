@@ -47,8 +47,8 @@ set(SOURCES
     src/network/WhoIAmScanner.cpp
 
     # Шаг 3 — Web + SNTP
-    # src/network/WebClient.cpp
-    # src/network/SntpClient.cpp
+     src/network/WebClient.cpp
+     src/network/SntpClient.cpp
 
     # Шаг 4 — UART-GNSS
     # src/serial/UartMonitor.cpp

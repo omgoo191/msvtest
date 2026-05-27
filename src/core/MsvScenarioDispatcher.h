@@ -5,6 +5,8 @@
 #include "network/WhoIAmScanner.h"
 #include "network/WhoIAmTypes.h"
 #include <QList>
+#include "network/WebClient.h"
+#include "network/SntpClient.h"
 
 namespace Msv::Core {
 
@@ -35,10 +37,14 @@ protected:
 
 private:
     void runWhoIAm();
+	void runWebStatus();
+	void runSntp();
 
     IDeviceModel*            m_deviceModel  {nullptr};
     Network::WhoIAmScanner*  m_whoIAmScanner{nullptr};
     Network::WhoIAmConfig    m_whoIAmConfig;
+	Network::WebClient*	     m_webClient    {nullptr};
+	Network::SntpClient*      m_sntpClient   {nullptr};
 
     static constexpr const char* kSrc = "MsvDispatcher";
 };

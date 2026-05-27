@@ -5,6 +5,9 @@
 #include <QNetworkReply>
 #include <QTimer>
 #include <QUrl>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QTimeZone>
 
 namespace Msv::Network {
 
@@ -65,8 +68,7 @@ void WebClient::onReplyFinished()
     // ── Время из заголовка Date (всегда присутствует в HTTP) ──────────────────
     const QString dateHeader = reply->rawHeader("Date");
     if (!dateHeader.isEmpty()) {
-        result.webTime = QDateTime::fromString(dateHeader, Qt::RFC2822Date);
-        result.webTime.setTimeSpec(Qt::UTC);
+        result.webTime = QDateTime::fromString(dateHeader, Qt::RFC2822Date).toUTC();
         m_logger->debug(kSrc, QStringLiteral("Date header: %1").arg(dateHeader));
     }
 
@@ -91,34 +93,69 @@ void WebClient::onTimeout()
 
 void WebClient::parseBody(const QByteArray& body, Result& out) const
 {
-    // ── Заглушка — переопредели под реальный API МСВ ──────────────────────────
-    //
-    // Пример если устройство возвращает JSON:
-    //   {"syncSource":"GNSS","syncStatus":"Synchronized","time":"2024-01-01T12:00:00Z"}
-    //
-    // Пример если устройство возвращает текст:
-    //   SYNC_SOURCE=GNSS\nSYNC_STATUS=OK\n
-    //
-    // Пока ищем ключевые слова в теле (регистронезависимо):
+	// Парсим JSON от /tags.shtml
+	const QJsonDocument doc = QJsonDocument::fromJson(body);
+	if (doc.isNull() || !doc.isObject()) {
+		m_logger->warning(kSrc, "parseBody: не JSON");
+		return;
+	}
+	const QJsonObject obj = doc.object();
 
-    out.rawBody = QString::fromUtf8(body);
-    const QString bodyLower = out.rawBody.toLower();
+	// ── Прямое чтение всех полей ──────────────────────────────────────────────
+	out.macAddress     = obj.value("mac").toString();
+	out.gpsTime        = obj.value("t_gps").toString();
+	out.gpsDate        = obj.value("d_gps").toString();
+	out.gpsStatus      = obj.value("st_gps").toString();
+	out.gpsMode        = obj.value("lm_gps").toString();
+	out.gpsSatellites  = obj.value("vsn").toString();
+	out.gpsSignalLevel = obj.value("sss").toString();
+	out.rtcTime        = obj.value("t_rtc").toString();
+	out.rtcDate        = obj.value("d_rtc").toString();
+	out.rtcValidity    = obj.value("iv_rtc").toString();
+	out.antennaStatus  = obj.value("as").toString();
+	out.lastValidGps   = obj.value("lr").toString();
+	out.sntpSyncCount  = obj.value("ssn").toString();
+	out.uptime         = obj.value("wt").toString();
+	out.buildDate      = obj.value("sbd").toString();
+	out.crc            = obj.value("crc").toString();
+	// ── MAC-адрес ─────────────────────────────────────────────────────────────
+	out.macAddress    = obj.value("mac").toString();
+	out.antennaStatus = obj.value("as").toString();
+	out.gpsStatus     = obj.value("st_gps").toString();
 
-    // Источник синхронизации
-    if (bodyLower.contains("gnss") || bodyLower.contains("gps"))
-        out.syncSource = Core::SyncSource::GNSS;
-    else if (bodyLower.contains("ntp") || bodyLower.contains("external"))
-        out.syncSource = Core::SyncSource::NTP;
-    else if (bodyLower.contains("internal") || bodyLower.contains("free"))
-        out.syncSource = Core::SyncSource::Internal;
+	// ── Время устройства (td): "00:22:00.613 01 января 1970 год" ─────────────
+	const QString td = obj.value("td").toString();
+	const QStringList parts = td.split(' ', Qt::SkipEmptyParts);
+	if (parts.size() >= 4) {
+		static const QStringList months = {
+				"января","февраля","марта","апреля","мая","июня",
+				"июля","августа","сентября","октября","ноября","декабря"
+		};
+		const QTime  t   = QTime::fromString(parts[0], "HH:mm:ss.zzz");
+		const int    day = parts[1].toInt();
+		const int    mon = months.indexOf(parts[2].toLower()) + 1;
+		const int    yr  = parts[3].toInt();
+		if (t.isValid() && mon > 0 && yr >= 1970)
+			out.webTime = QDateTime({yr, mon, day}, t, QTimeZone::utc());
+	}
 
-    // Статус синхронизации
-    if (bodyLower.contains("synchronized") || bodyLower.contains("sync_ok") || bodyLower.contains("locked"))
-        out.syncStatus = Core::SyncStatus::Synchronized;
-    else if (bodyLower.contains("holdover"))
-        out.syncStatus = Core::SyncStatus::Holdover;
-    else if (bodyLower.contains("freerun") || bodyLower.contains("free_run") || bodyLower.contains("unsync"))
-        out.syncStatus = Core::SyncStatus::Freerun;
+	// ── Источник синхронизации (src) ──────────────────────────────────────────
+	const QString src = obj.value("src").toString().toUpper();
+	if (src == "PPS")
+		out.syncSource = Core::SyncSource::GNSS;
+	else if (src == "NTP")
+		out.syncSource = Core::SyncSource::NTP;
+	else
+		out.syncSource = Core::SyncSource::Internal;
+
+	// ── Статус синхронизации ──────────────────────────────────────────────────
+	// st_gps: "A - решение годно" = синхр., "V - решение не годно" = нет
+	if (out.gpsStatus.startsWith("A"))
+		out.syncStatus = Core::SyncStatus::Synchronized;
+	else if (src == "PPS")
+		out.syncStatus = Core::SyncStatus::Holdover; // PPS есть, GPS потерян
+	else
+		out.syncStatus = Core::SyncStatus::Freerun;
 }
 
 } // namespace Msv::Network

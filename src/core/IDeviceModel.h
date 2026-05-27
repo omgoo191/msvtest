@@ -53,10 +53,47 @@ struct DeviceSnapshot {
     std::optional<QDateTime> sntpTime;  ///< Время из SNTP-ответа
     std::optional<QDateTime> gnssTime;  ///< Время из NMEA RMC/GGA
 
+	// — GPS-данные ──────────────────────────────────────────────────────────────
+	QString      gpsTime;             // "t_gps"
+	QString      gpsDate;             // "d_gps"
+	QString      gpsStatus;           // "st_gps": "A - решение годно" / "V - ..."
+	QString      gpsMode;             // "lm_gps"
+	QString      gpsSatellites;       // "vsn": "0/0"
+	QString      gpsSignalLevel;      // "sss"
+
+	// — RTC-данные ──────────────────────────────────────────────────────────────
+	QString      rtcTime;             // "t_rtc"
+	QString      rtcDate;             // "d_rtc"
+	QString      rtcValidity;         // "iv_rtc": "Данные валидны" / "не валидны"
+
+	// — Сервисные данные ────────────────────────────────────────────────────────
+	QString      antennaStatus;       // "as": "Антенна подключена" / "не подключена"
+	QString      lastValidGps;        // "lr": время последнего валидного GPS
+	QString      sntpSyncCount;       // "ssn": число успешных SNTP-синхронизаций
+	QString      uptime;              // "wt"
+
+	// — Версия и сборка ─────────────────────────────────────────────────────────
+	QString      buildDate;           // "sbd"
+	QString      crc;                 // "crc"
+
+
     // — Флаг валидности ───────────────────────────────────────────────────────
     [[nodiscard]] bool isIdentified() const {
         return !ipAddress.isNull() && !firmwareVersion.isEmpty();
     }
+};
+
+struct WebStatusData {
+	SyncSource syncSource {SyncSource::Unknown};
+	SyncStatus syncStatus {SyncStatus::Unknown};
+	QDateTime  webTime;
+	QString    macAddress;
+	QString    gpsTime;      QString gpsDate;    QString gpsStatus;
+	QString    gpsMode;      QString gpsSatellites; QString gpsSignalLevel;
+	QString    rtcTime;      QString rtcDate;    QString rtcValidity;
+	QString    antennaStatus;
+	QString    lastValidGps; QString sntpSyncCount; QString uptime;
+	QString    buildDate;    QString crc;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -85,9 +122,7 @@ public:
                                    int leapIndicator,
                                    int stratum) = 0;
 
-    virtual void applyWebStatus   (SyncSource source,
-                                   SyncStatus status,
-                                   const QDateTime& webTime) = 0;
+    virtual void applyWebStatus   (const WebStatusData& data) = 0;
 
     virtual void applyGnssTime    (const QDateTime& utcTime) = 0;
 

@@ -50,7 +50,7 @@ protected:
 private slots:
     void onTimeoutTick();
 
-private:
+protected:
     void advanceToStep(int index);
     void setState(DispatcherState newState);
     void emitProgress();

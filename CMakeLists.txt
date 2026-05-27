@@ -40,7 +40,7 @@ set(SOURCES
     src/core/ScenarioDispatcher.cpp
     src/ui/MainWindow.cpp
     src/ui/StepItemWidget.cpp
-
+    src/core/ILogger.cpp
     # Шаг 2 — WhoIAm
     src/core/MsvScenarioDispatcher.cpp
     src/network/WhoIAmScanner.cpp

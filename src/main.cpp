@@ -72,9 +72,11 @@ int main(int argc, char* argv[])
 
     // ── Controller ────────────────────────────────────────────────────────────
     Msv::Network::WhoIAmConfig whoIAmConfig;
-    whoIAmConfig.port            = 54321;   // порт МСВ — уточнить по документации
+    // Порт и payload берём из реального протокола изделия
+    whoIAmConfig.port            = 30000;
     whoIAmConfig.retries         = 3;
     whoIAmConfig.retryIntervalMs = 2000;
+    whoIAmConfig.requestPayload  = "WHO IS ENCORE?";
 
     auto dispatcher = std::make_unique<Msv::Core::MsvScenarioDispatcher>(
         buildScenarioSteps(),

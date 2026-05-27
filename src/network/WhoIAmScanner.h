@@ -3,6 +3,7 @@
 #include "WhoIAmTypes.h"
 #include "core/ILogger.h"
 #include <QObject>
+#include <QList>
 #include <memory>
 
 QT_BEGIN_NAMESPACE
@@ -13,17 +14,11 @@ QT_END_NAMESPACE
 namespace Msv::Network {
 
 // ─────────────────────────────────────────────────────────────────────────────
-/// UDP-broadcast сканер для обнаружения МСВ в сети.
+/// UDP-broadcast сканер.
 ///
-/// Жизненный цикл:
-///   start() → [deviceFound × N] → scanFinished(foundAny)
-///
-/// Как только найдено первое устройство — сканирование останавливается
-/// (в стенде ожидается ровно один МСВ). Если нужно несколько — убрать
-/// вызов stop() в onReadyRead().
-///
-/// Протокол разбора вынесен в виртуальный parseResponse() — подкласс
-/// может переопределить под реальный бинарный формат изделия.
+/// Собирает ВСЕ ответы за время сканирования (все попытки), затем
+/// эмитирует scanFinished(список). Не останавливается на первом ответе —
+/// оператор сам выбирает нужное устройство из списка.
 // ─────────────────────────────────────────────────────────────────────────────
 class WhoIAmScanner : public QObject {
     Q_OBJECT
@@ -38,15 +33,14 @@ public:
     [[nodiscard]] bool isScanning() const { return m_scanning; }
 
 signals:
-    void deviceFound  (const Msv::Network::WhoIAmResponse& response);
-    void scanFinished (bool foundAny);
+    /// Эмитируется по завершении сканирования. Список может быть пустым.
+    void scanFinished(const QList<Msv::Network::WhoIAmResponse>& found);
     void errorOccurred(const QString& message);
 
 protected:
-    /// Разбирает сырой UDP-payload. Возвращает true и заполняет out при успехе.
-    virtual bool parseResponse(const QByteArray&    data,
-                               const QHostAddress&  sender,
-                               WhoIAmResponse&      out) const;
+    virtual bool parseResponse(const QByteArray&   data,
+                               const QHostAddress& sender,
+                               WhoIAmResponse&     out) const;
 
 private slots:
     void onReadyRead();
@@ -54,18 +48,17 @@ private slots:
 
 private:
     void sendBroadcast();
-    void finish(bool foundAny);
 
-    QUdpSocket*  m_socket  {nullptr};
+    QUdpSocket*  m_socket     {nullptr};
     QTimer*      m_retryTimer {nullptr};
 
-    WhoIAmConfig m_config;
-    bool         m_scanning  {false};
-    bool         m_foundAny  {false};
-    int          m_retrysDone{0};
+    WhoIAmConfig                m_config;
+    bool                        m_scanning   {false};
+    int                         m_retrysDone {0};
+    QList<WhoIAmResponse>       m_found;      ///< Накопленные ответы
 
     std::shared_ptr<Core::ILogger> m_logger;
-    static constexpr const char* kSrc = "WhoIAmScanner";
+    static constexpr const char*   kSrc = "WhoIAmScanner";
 };
 
 } // namespace Msv::Network

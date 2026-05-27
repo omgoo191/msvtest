@@ -4,9 +4,7 @@
 
 namespace Msv::Core {
 
-DeviceModel::DeviceModel(QObject* parent)
-    : IDeviceModel(parent)
-{}
+DeviceModel::DeviceModel(QObject* parent) : IDeviceModel(parent) {}
 
 DeviceSnapshot DeviceModel::currentSnapshot() const
 {
@@ -21,33 +19,25 @@ bool DeviceModel::isDeviceFound() const
 }
 
 void DeviceModel::applyWhoIAmData(const QHostAddress& ip,
-                                   const QString&      mac,
                                    const QString&      firmware,
-                                   const QString&      serial)
+                                   int                 deviceId,
+                                   const QString&      deviceName)
 {
     DeviceSnapshot snap;
     bool firstFound = false;
-
     {
         QMutexLocker lock(&m_mutex);
         m_snapshot.capturedAt      = QDateTime::currentDateTimeUtc();
         m_snapshot.ipAddress       = ip;
-        m_snapshot.macAddress      = mac;
         m_snapshot.firmwareVersion = firmware;
-        m_snapshot.serialNumber    = serial;
-
-        if (!m_deviceFound) {
-            m_deviceFound = true;
-            firstFound    = true;
-        }
+        m_snapshot.deviceId        = deviceId;
+        m_snapshot.deviceName      = deviceName;
+        if (!m_deviceFound) { m_deviceFound = true; firstFound = true; }
         snap = m_snapshot;
     }
-
-    // Эмит сигналов — всегда через invokeMethod, чтобы попасть в GUI-поток
     QMetaObject::invokeMethod(this, [this, snap, firstFound]() {
         emit snapshotChanged(snap);
-        if (firstFound)
-            emit deviceFound(snap);
+        if (firstFound) emit deviceFound(snap);
     }, Qt::QueuedConnection);
 }
 
@@ -67,8 +57,7 @@ void DeviceModel::applySntpData(const QDateTime& time, int leapIndicator, int st
     }, Qt::QueuedConnection);
 }
 
-void DeviceModel::applyWebStatus(SyncSource source, SyncStatus status,
-                                  const QDateTime& webTime)
+void DeviceModel::applyWebStatus(SyncSource source, SyncStatus status, const QDateTime& webTime)
 {
     DeviceSnapshot snap;
     {
@@ -105,7 +94,6 @@ void DeviceModel::reset()
         m_snapshot    = DeviceSnapshot{};
         m_deviceFound = false;
     }
-    // После сброса сигнал deviceLost если было устройство
     QMetaObject::invokeMethod(this, [this]() {
         emit deviceLost();
     }, Qt::QueuedConnection);

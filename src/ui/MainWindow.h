@@ -50,7 +50,8 @@ private slots:
     void onSnapshotChanged  (const Core::DeviceSnapshot& snap);
     void onLogEntryAdded    (const Core::LogEntry& entry);
     void onScenarioFinished (bool overallPass);
-    void onManualIpRequired ();   ///< WhoIAm не нашёл устройство — показать диалог
+    void onManualIpRequired ();
+    void onDeviceSelectionRequired(const QList<Msv::Network::WhoIAmResponse>& found);   ///< WhoIAm не нашёл устройство — показать диалог
 
 private:
     void buildUi();

@@ -3,36 +3,37 @@
 #include <QHostAddress>
 #include <QString>
 #include <QByteArray>
+#include <QMap>
 
 namespace Msv::Network {
 
-// ─────────────────────────────────────────────────────────────────────────────
-/// Конфигурация сканирования.
-///
-/// Протокол (по умолчанию):
-///   Запрос:  "MSVWHOIAM?\r\n"
-///   Ответ:   "MSVWHOIAM;MAC=AA:BB:..;FW=1.2.3;SN=12345678\r\n"
-///
-/// IP берётся из заголовка UDP-датаграммы (адрес отправителя).
-/// Всё остальное — из тела ответа. Формат легко меняется переопределением
-/// WhoIAmScanner::parseResponse().
-// ─────────────────────────────────────────────────────────────────────────────
 struct WhoIAmConfig {
-    quint16    port            {54321};
-    int        retries         {3};       ///< Сколько раз слать broadcast
-    int        retryIntervalMs {2000};    ///< Интервал между попытками
-    QByteArray requestPayload  {"MSVWHOIAM?\r\n"};
+    quint16    port            {30000};
+    int        retries         {3};
+    int        retryIntervalMs {2000};
+    QByteArray requestPayload  {"WHO IS ENCORE?"};
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-/// Разобранный ответ от одного МСВ.
+/// Разобранный ответ от одного устройства.
 // ─────────────────────────────────────────────────────────────────────────────
 struct WhoIAmResponse {
-    QHostAddress ipAddress;        ///< IP из UDP-заголовка
-    QString      macAddress;
+    QHostAddress ipAddress;
+    int          deviceId        {0};
     QString      firmwareVersion;
-    QString      serialNumber;
-    QByteArray   rawData;          ///< Сырой payload для отладки
+    QByteArray   rawData;
+
+    /// Человекочитаемое имя по ID.
+    [[nodiscard]] QString deviceName() const
+    {
+        static const QMap<int, QString> names {
+            {20401, "Модуль синхронизации времени"},
+            {20402, "Устройство 2"},
+            {20403, "Устройство 3"},
+        };
+        return names.value(deviceId,
+            QStringLiteral("Неизвестное устройство (ID %1)").arg(deviceId));
+    }
 };
 
 } // namespace Msv::Network

@@ -61,10 +61,12 @@ private:
     int                     m_currentIdx {-1};
 
     QTimer                  m_timeoutTimer;
-    std::shared_ptr<ILogger> m_logger;
-    bool                    m_stepFinishing {false};  ///< Защита от реентрантного вызова
+    bool                    m_stepFinishing {false};
 
     static constexpr const char* kSource = "ScenarioDispatcher";
+
+protected:
+    std::shared_ptr<ILogger> m_logger;  ///< Доступен подклассам (MsvScenarioDispatcher)
 };
 
 } // namespace Msv::Core

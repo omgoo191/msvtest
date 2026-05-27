@@ -4,19 +4,10 @@
 #include "IDeviceModel.h"
 #include "network/WhoIAmScanner.h"
 #include "network/WhoIAmTypes.h"
+#include <QList>
 
 namespace Msv::Core {
 
-// ─────────────────────────────────────────────────────────────────────────────
-/// Конкретный диспетчер МСВ.
-///
-/// Переопределяет executeStep() и подключает реальные подсистемы:
-///   Шаг 0 — WhoIAmScanner
-///   Шаги 1–9 — заглушки (будут заменены в Шагах 3–6)
-///
-/// Добавляет сигнал manualIpRequired() когда WhoIAm не нашёл устройство,
-/// и слот provideManualIp() для получения ответа от UI.
-// ─────────────────────────────────────────────────────────────────────────────
 class MsvScenarioDispatcher : public ScenarioDispatcher {
     Q_OBJECT
 public:
@@ -28,24 +19,26 @@ public:
     ~MsvScenarioDispatcher() override = default;
 
 public slots:
-    /// UI вызывает этот слот после того как оператор ввёл IP вручную.
+    /// Оператор выбрал устройство из списка.
+    void selectDevice(const Network::WhoIAmResponse& device);
+
+    /// Оператор ввёл IP вручную.
     void provideManualIp(const QHostAddress& ip);
 
 signals:
-    /// Сканирование WhoIAm не нашло устройство — нужен ручной ввод IP.
-    void manualIpRequired();
+    /// Сканирование завершено — показать диалог выбора.
+    /// Список может быть пустым (ни одного устройства не найдено).
+    void deviceSelectionRequired(const QList<Msv::Network::WhoIAmResponse>& found);
 
 protected:
     void executeStep(int stepIndex) override;
 
 private:
-    // ── Исполнители шагов ─────────────────────────────────────────────────────
-    void runWhoIAm();   ///< Шаг 0
+    void runWhoIAm();
 
-    // ── Данные ───────────────────────────────────────────────────────────────
-    IDeviceModel*               m_deviceModel  {nullptr};
-    Network::WhoIAmScanner*     m_whoIAmScanner{nullptr};
-    Network::WhoIAmConfig       m_whoIAmConfig;
+    IDeviceModel*            m_deviceModel  {nullptr};
+    Network::WhoIAmScanner*  m_whoIAmScanner{nullptr};
+    Network::WhoIAmConfig    m_whoIAmConfig;
 
     static constexpr const char* kSrc = "MsvDispatcher";
 };

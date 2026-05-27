@@ -1,9 +1,11 @@
 #include "MainWindow.h"
 #include "StepItemWidget.h"
+#include "DeviceSelectionDialog.h"
 #include "core/IScenarioDispatcher.h"
 #include "core/MsvScenarioDispatcher.h"
 #include "core/IDeviceModel.h"
 #include "core/Logger.h"
+#include "network/WhoIAmTypes.h"
 
 #include <QInputDialog>
 #include <QMessageBox>
@@ -393,25 +395,44 @@ void MainWindow::buildUi()
         {
             auto* card = new QFrame(mainWidget);
             card->setObjectName("card");
-            card->setMinimumHeight(160);
+            card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
             auto* cl = new QVBoxLayout(card);
-            cl->setContentsMargins(20, 16, 20, 16);
-            cl->setSpacing(10);
+            cl->setContentsMargins(18, 14, 18, 14);
+            cl->setSpacing(8);
 
             m_promptHeader = new QLabel("ИНСТРУКЦИЯ", card);
             m_promptHeader->setObjectName("promptHeader");
 
-            m_promptBody = new QLabel(
-                "Нажмите «ЗАПУСТИТЬ» для начала сценария проверки.",
-                card
+            // QTextEdit вместо QLabel — нет проблем с переносом и выходом текста за края
+            auto* promptEdit = new QTextEdit(card);
+            promptEdit->setObjectName("promptBody");
+            promptEdit->setReadOnly(true);
+            promptEdit->setFrameShape(QFrame::NoFrame);
+            promptEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+            promptEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            promptEdit->setStyleSheet(
+                "QTextEdit#promptBody {"
+                "  background: transparent;"
+                "  color: #c0c0c0;"
+                "  font-size: 11pt;"
+                "  font-family: 'Segoe UI', Arial, sans-serif;"
+                "  border: none;"
+                "  padding: 0px;"
+                "}"
             );
-            m_promptBody->setObjectName("promptBody");
-            m_promptBody->setWordWrap(true);
-            m_promptBody->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+            promptEdit->setPlainText("Нажмите «ЗАПУСТИТЬ» для начала сценария проверки.");
+            // Сохраняем указатель через динамическое свойство для setPrompt()
+            card->setProperty("promptEdit", QVariant::fromValue<QObject*>(promptEdit));
+            m_promptBody = nullptr; // больше не используем m_promptBody напрямую
 
             cl->addWidget(m_promptHeader);
-            cl->addWidget(m_promptBody, 1);
+            cl->addWidget(promptEdit, 1);
             ml->addWidget(card, 1);
+
+            // Сохраняем edit в поле для использования в setPrompt
+            // Переопределяем через лямбду — храним указатель в m_promptBody как QLabel*
+            // HACK: используем setObjectName чтобы найти виджет позже через findChild
+            promptEdit->setObjectName("thePromptEdit");
         }
 
         // Кнопки
@@ -510,8 +531,8 @@ void MainWindow::connectSignals()
 
     // MsvScenarioDispatcher-специфичный сигнал — подключаем через qobject_cast
     if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher)) {
-        connect(msv, &Core::MsvScenarioDispatcher::manualIpRequired,
-                this, &MainWindow::onManualIpRequired);
+        connect(msv, &Core::MsvScenarioDispatcher::deviceSelectionRequired,
+                this, &MainWindow::onDeviceSelectionRequired);
     }
 }
 
@@ -579,14 +600,14 @@ void MainWindow::onSnapshotChanged(const Core::DeviceSnapshot& snap)
 {
     if (!snap.isIdentified()) return;
     m_deviceLabel->setText(QStringLiteral(
-        "IP %1   ·   MAC %2   ·   FW %3   ·   S/N %4")
+        "%1     IP %2     FW %3     ID %4")
+        .arg(snap.deviceName.isEmpty() ? "—" : snap.deviceName)
         .arg(snap.ipAddress.toString())
-        .arg(snap.macAddress)
         .arg(snap.firmwareVersion)
-        .arg(snap.serialNumber)
+        .arg(snap.deviceId)
     );
     m_deviceLabel->setStyleSheet(
-        "color: #606060;"
+        "color: #707070;"
         "font-size: 9pt;"
         "font-family: 'JetBrains Mono', 'Consolas', monospace;"
     );
@@ -675,43 +696,34 @@ void MainWindow::setPrompt(const QString& header, const QString& body,
     m_promptHeader->setStyleSheet(QStringLiteral(
         "color: %1; font-size: 8pt; font-weight: bold; letter-spacing: 2px;")
         .arg(accentColor));
-    m_promptBody->setText(body);
+
+    // Находим QTextEdit по objectName (установлен в buildUi)
+    if (auto* edit = findChild<QTextEdit*>("thePromptEdit"))
+        edit->setPlainText(body);
 }
 
-void MainWindow::onManualIpRequired()
+void MainWindow::onDeviceSelectionRequired(const QList<Network::WhoIAmResponse>& found)
 {
-    setPrompt("ТРЕБУЕТСЯ ВВОД",
-              "WhoIAm-сканирование не обнаружило МСВ.\nВведите IP-адрес изделия вручную.",
-              "#ff9800");
+    setPrompt("ВЫБОР УСТРОЙСТВА",
+              "Сканирование завершено. Выберите устройство из списка.",
+              "#00e5cc");
 
-    bool ok = false;
-    QString ip = QInputDialog::getText(
-        this,
-        tr("Устройство не найдено"),
-        tr("WhoIAm не обнаружил МСВ в сети.\n\nВведите IP-адрес изделия:"),
-        QLineEdit::Normal,
-        QStringLiteral("192.168.1."),
-        &ok
-    );
-
-    if (!ok || ip.trimmed().isEmpty()) {
-        // Оператор отменил — прерываем сценарий
+    DeviceSelectionDialog dlg(found, this);
+    if (dlg.exec() != QDialog::Accepted) {
         m_dispatcher->abort();
         return;
     }
 
-    const QHostAddress addr(ip.trimmed());
-    if (addr.isNull() || addr == QHostAddress::Any) {
-        QMessageBox::warning(this, tr("Ошибка"),
-            tr("«%1» — неверный IP-адрес.\nПопробуйте ещё раз.").arg(ip));
-        // Повтор в следующем цикле событий (не рекурсия в стеке)
-        QMetaObject::invokeMethod(this, &MainWindow::onManualIpRequired,
-                                  Qt::QueuedConnection);
-        return;
+    if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher)) {
+        if (dlg.wasManualEntry())
+            msv->provideManualIp(dlg.manualIp());
+        else
+            msv->selectDevice(dlg.selectedDevice());
     }
-
-    if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher))
-        msv->provideManualIp(addr);
 }
+
+// Оставляем как заглушку на случай если понадобится напрямую
+void MainWindow::onManualIpRequired() {}
+
 
 } // namespace Msv::Ui

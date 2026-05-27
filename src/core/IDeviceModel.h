@@ -37,9 +37,10 @@ struct DeviceSnapshot {
 
     // — Идентификация ─────────────────────────────────────────────────────────
     QHostAddress ipAddress;
-    QString      macAddress;         ///< "AA:BB:CC:DD:EE:FF"
+    QString      macAddress;         ///< "AA:BB:CC:DD:EE:FF" (если доступен)
+    int          deviceId       {0}; ///< ID из протокола WhoIAm (напр. 20401)
+    QString      deviceName;         ///< Человекочитаемое имя по deviceId
     QString      firmwareVersion;    ///< Из ответа WhoIAm / Web
-    QString      serialNumber;
 
     // — Синхронизация ─────────────────────────────────────────────────────────
     SyncSource   syncSource  {SyncSource::Unknown};
@@ -76,9 +77,9 @@ public:
 
     // ── Запись состояния (вызывается подсистемами, не UI) ─────────────────────
     virtual void applyWhoIAmData  (const QHostAddress& ip,
-                                   const QString&      mac,
                                    const QString&      firmware,
-                                   const QString&      serial) = 0;
+                                   int                 deviceId,
+                                   const QString&      deviceName) = 0;
 
     virtual void applySntpData    (const QDateTime& time,
                                    int leapIndicator,

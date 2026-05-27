@@ -702,7 +702,7 @@ void MainWindow::setPrompt(const QString& header, const QString& body,
         edit->setPlainText(body);
 }
 
-void MainWindow::onDeviceSelectionRequired(const QList<Network::WhoIAmResponse>& found)
+void MainWindow::onDeviceSelectionRequired(const Msv::Network::WhoIAmResponseList& found)
 {
     setPrompt("ВЫБОР УСТРОЙСТВА",
               "Сканирование завершено. Выберите устройство из списка.",

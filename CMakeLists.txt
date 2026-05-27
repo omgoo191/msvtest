@@ -41,6 +41,7 @@ set(SOURCES
     src/ui/MainWindow.cpp
     src/ui/StepItemWidget.cpp
     src/core/ILogger.cpp
+    src/ui/DeviceSelectionDialog.cpp
     # Шаг 2 — WhoIAm
     src/core/MsvScenarioDispatcher.cpp
     src/network/WhoIAmScanner.cpp

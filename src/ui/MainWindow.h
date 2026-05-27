@@ -3,7 +3,7 @@
 #include <QMainWindow>
 #include <QList>
 #include <memory>
-
+#include "network/WhoIAmTypes.h"
 namespace Msv::Core {
     class IScenarioDispatcher;
     class IDeviceModel;
@@ -51,7 +51,7 @@ private slots:
     void onLogEntryAdded    (const Core::LogEntry& entry);
     void onScenarioFinished (bool overallPass);
     void onManualIpRequired ();
-    void onDeviceSelectionRequired(const QList<Msv::Network::WhoIAmResponse>& found);   ///< WhoIAm не нашёл устройство — показать диалог
+    void onDeviceSelectionRequired(const Msv::Network::WhoIAmResponseList& found);   ///< WhoIAm не нашёл устройство — показать диалог
 
 private:
     void buildUi();

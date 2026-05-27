@@ -5,7 +5,11 @@
 #include <QByteArray>
 #include <QMap>
 
+
+
 namespace Msv::Network {
+
+
 
 struct WhoIAmConfig {
     quint16    port            {30000};
@@ -35,5 +39,10 @@ struct WhoIAmResponse {
             QStringLiteral("Неизвестное устройство (ID %1)").arg(deviceId));
     }
 };
+using WhoIAmResponseList = QList<WhoIAmResponse>;
+
 
 } // namespace Msv::Network
+Q_DECLARE_METATYPE(Msv::Network::WhoIAmResponse)
+
+Q_DECLARE_METATYPE(Msv::Network::WhoIAmResponseList)

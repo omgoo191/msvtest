@@ -28,7 +28,7 @@ public slots:
 signals:
     /// Сканирование завершено — показать диалог выбора.
     /// Список может быть пустым (ни одного устройства не найдено).
-    void deviceSelectionRequired(const QList<Msv::Network::WhoIAmResponse>& found);
+    void deviceSelectionRequired(const Msv::Network::WhoIAmResponseList& found);
 
 protected:
     void executeStep(int stepIndex) override;

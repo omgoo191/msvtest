@@ -34,7 +34,7 @@ public:
 
 signals:
     /// Эмитируется по завершении сканирования. Список может быть пустым.
-    void scanFinished(const QList<Msv::Network::WhoIAmResponse>& found);
+    void scanFinished(const Msv::Network::WhoIAmResponseList& found);
     void errorOccurred(const QString& message);
 
 protected:

@@ -29,7 +29,7 @@ void MsvScenarioDispatcher::runWhoIAm()
     m_whoIAmScanner->disconnect(this);
 
     connect(m_whoIAmScanner, &Network::WhoIAmScanner::scanFinished,
-            this, [this](const QList<Network::WhoIAmResponse>& found)
+            this, [this](const Network::WhoIAmResponseList& found)
     {
         m_whoIAmScanner->disconnect(this);
         m_logger->info(kSrc, QStringLiteral("Сканирование завершено, найдено: %1").arg(found.size()));

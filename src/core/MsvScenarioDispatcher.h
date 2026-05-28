@@ -45,6 +45,9 @@ private:
 	void runUartMonitor();
 	void stopUartMonitoring();
 	void reset() override;
+	void runKzMonitoring();
+	void runKzRecovery();
+	void stopPollTimer();
 
     IDeviceModel*            m_deviceModel  {nullptr};
     Network::WhoIAmScanner*  m_whoIAmScanner{nullptr};
@@ -54,6 +57,11 @@ private:
 	Serial::UartMonitor*     m_uartMonitor  {nullptr};
 	QTimer*                  m_uartTimer    {nullptr};
 	QTimer*                  m_uartNoDataTimer    {nullptr};
+	QTimer*					 m_pollTimer     {nullptr};
+	int                      m_pollCount      {0};
+	int 					 m_maxPolls       {0};
+	DeviceSnapshot           m_snapshotBeforeKz;
+	DeviceSnapshot           m_snapshotDuringKz;
 
     static constexpr const char* kSrc = "MsvDispatcher";
 

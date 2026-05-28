@@ -53,6 +53,11 @@ struct DeviceSnapshot {
     std::optional<QDateTime> sntpTime;  ///< Время из SNTP-ответа
     std::optional<QDateTime> gnssTime;  ///< Время из NMEA RMC/GGA
 
+	// — Метки времени ПК в момент получения каждого источника ───────────────────
+	QDateTime    webCapturedAt;   ///< ПК-время когда получили webTime
+	QDateTime    sntpCapturedAt;  ///< ПК-время когда получили sntpTime
+	QDateTime    gnssCapturedAt;  ///< ПК-время когда получили gnssTime
+
 	// — GPS-данные ──────────────────────────────────────────────────────────────
 	QString      gpsTime;             // "t_gps"
 	QString      gpsDate;             // "d_gps"

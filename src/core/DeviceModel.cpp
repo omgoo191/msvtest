@@ -50,6 +50,7 @@ void DeviceModel::applySntpData(const QDateTime& time, int leapIndicator, int st
         m_snapshot.sntpTime      = time;
         m_snapshot.leapIndicator = leapIndicator;
         m_snapshot.stratumLevel  = stratum;
+		m_snapshot.sntpCapturedAt = QDateTime::currentDateTimeUtc();
         snap = m_snapshot;
     }
     QMetaObject::invokeMethod(this, [this, snap]() {
@@ -65,6 +66,7 @@ void DeviceModel::applyGnssTime(const QDateTime& utcTime)
         QMutexLocker lock(&m_mutex);
         m_snapshot.capturedAt = QDateTime::currentDateTimeUtc();
         m_snapshot.gnssTime   = utcTime;
+		m_snapshot.gnssCapturedAt = QDateTime::currentDateTimeUtc();
         snap = m_snapshot;
     }
     QMetaObject::invokeMethod(this, [this, snap]() {
@@ -93,6 +95,7 @@ void DeviceModel::applyWebStatus(const Core::WebStatusData& data)
 		m_snapshot.syncSource     = data.syncSource;
 		m_snapshot.syncStatus     = data.syncStatus;
 		m_snapshot.webTime        = data.webTime;
+		m_snapshot.capturedAt     = QDateTime::currentDateTimeUtc();
 		m_snapshot.macAddress     = data.macAddress;
 		m_snapshot.gpsTime        = data.gpsTime;
 		m_snapshot.gpsDate        = data.gpsDate;

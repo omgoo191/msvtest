@@ -51,9 +51,9 @@ set(SOURCES
      src/network/SntpClient.cpp
 
     # Шаг 4 — UART-GNSS
-    # src/serial/UartMonitor.cpp
-    # src/serial/NmeaParser.cpp
-
+     src/serial/UartMonitor.cpp
+     src/serial/NmeaParser.cpp
+    src/ui/SerialPortSelectionDialog.cpp
     # Шаг 5 — Анализатор
     # src/analysis/DataAnalyzer.cpp
 

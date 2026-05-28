@@ -209,4 +209,18 @@ void ScenarioDispatcher::reset()
 	m_logger->info(kSource, "Сценарий сброшен");
 }
 
+void ScenarioDispatcher::restartFromStep(int index)
+{
+	if (index < 0 || index >= m_steps.size()) return;
+	m_timeoutTimer.stop();
+
+	// Очистить результаты начиная с index
+	for (int i = index; i < m_results.size(); ++i)
+		m_results[i] = StepResult::NotRun;
+
+	m_stepFinishing = false;
+	setState(DispatcherState::Running);
+	advanceToStep(index);
+}
+
 } // namespace Msv::Core

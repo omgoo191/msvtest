@@ -65,8 +65,9 @@ NmeaResult NmeaParser::parseRmc(const QStringList& fields, const QByteArray& raw
     if (fields.size() < 10) return r;
 
     // [1] время, [9] дата
-    r.utcTime = parseUtcTime(fields[1], fields[9]);
 
+	const QString dateStr = (fields.size() > 9) ? fields[9] : QString();
+	r.utcTime = parseUtcTime(fields[1], dateStr);
     // [2] статус: A=valid, V=warning
     r.isValid = (fields[2].toUpper() == "A");
 

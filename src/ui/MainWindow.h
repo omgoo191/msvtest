@@ -4,6 +4,8 @@
 #include <QList>
 #include <memory>
 #include "network/WhoIAmTypes.h"
+#include "ui/SerialPortSelectionDialog.h"
+
 namespace Msv::Core {
     class IScenarioDispatcher;
     class IDeviceModel;
@@ -54,6 +56,7 @@ private slots:
     void onDeviceSelectionRequired(const Msv::Network::WhoIAmResponseList& found);   ///< WhoIAm не нашёл устройство — показать диалог
     void onContinueClicked();
 	void onStepItemClicked(int index);
+	void onPortSelectionRequired();
 
 private:
     void buildUi();

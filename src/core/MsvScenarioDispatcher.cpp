@@ -15,15 +15,20 @@ MsvScenarioDispatcher::MsvScenarioDispatcher(
     m_whoIAmScanner = new Network::WhoIAmScanner(logger, this);
 	m_webClient = new Network::WebClient(logger, this);
 	m_sntpClient = new Network::SntpClient(logger, this);
+	m_uartMonitor = new Serial::UartMonitor(logger, this);
 
 }
 
 void MsvScenarioDispatcher::executeStep(int stepIndex)
 {
+	if(stepIndex !=4)
+		stopUartMonitoring();
+
     switch (stepIndex) {
         case 0: runWhoIAm(); break;
 		case 1: runWebStatus(); break;
 		case 2: runSntp();      break;
+		case 4: runUartMonitor(); break;
 		default: ScenarioDispatcher::executeStep(stepIndex); break;
     }
 }
@@ -214,6 +219,152 @@ void MsvScenarioDispatcher::provideManualIp(const QHostAddress& ip)
 				}, Qt::QueuedConnection);
 
 		m_sntpClient->request(ip);
+	}
+
+	void MsvScenarioDispatcher::runUartMonitor()
+	{
+		m_logger->info(kSrc, "Запуск мониторинга UART-GNSS...");
+		stopUartMonitoring();
+		emit portSelectionRequired();  // всегда спрашиваем порт
+	}
+
+	void MsvScenarioDispatcher::selectPort(const QString& portName, int baudRate)
+	{
+		m_logger->info(kSrc, QStringLiteral("Выбран порт: %1 @ %2")
+				.arg(portName).arg(baudRate));
+
+		if (!m_uartMonitor->open(portName, baudRate)) {
+			finishCurrentStep(StepResult::Fail,
+							  QStringLiteral("не удалось открыть %1").arg(portName));
+			return;
+		}
+
+		auto stats = std::make_shared<UartStats>();
+
+		connect(m_uartMonitor, &Serial::UartMonitor::sentenceReceived,
+				this, [this, stats](const Serial::NmeaResult& r)
+				{
+					stats->total++;
+					if (!r.checksumValid) return;
+					stats->checksumOk++;
+
+					if (r.sentenceType == "RMC") stats->rmcCount++;
+					if (r.sentenceType == "GGA") stats->ggaCount++;
+
+					if (r.utcTime.isValid() && stats->lastUtc.isValid()) {
+						if (r.utcTime <= stats->lastUtc)
+							stats->monotonErrors++;
+					}
+					if (r.utcTime.isValid())
+						stats->lastUtc = r.utcTime;
+
+					if (r.isValid && r.utcTime.isValid())
+						m_deviceModel->applyGnssTime(r.utcTime);
+
+					// Сбрасываем таймер "нет данных"
+					if (m_uartNoDataTimer)
+						m_uartNoDataTimer->start(5000);
+
+				});
+
+		// Таймер "нет данных 5 секунд"
+		m_uartNoDataTimer = new QTimer(this);
+		m_uartNoDataTimer->setSingleShot(true);
+		connect(m_uartNoDataTimer, &QTimer::timeout,
+				this, [this]()
+				{
+					if (m_uartNoDataTimer) {
+						m_uartNoDataTimer->deleteLater();
+						m_uartNoDataTimer = nullptr;
+					}
+					// Срабатываем только если основной таймер ещё жив
+					if (!m_uartTimer) return;
+					m_logger->warning(kSrc, "Нет данных 5 секунд — смена порта");
+					stopUartMonitoring();
+					emit portSelectionRequired();
+				});
+		m_uartNoDataTimer->start(5000);
+
+		// Основной таймер 60 секунд
+		m_uartTimer = new QTimer(this);
+		m_uartTimer->setSingleShot(true);
+		connect(m_uartTimer, &QTimer::timeout,
+				this, [this, stats]()
+				{
+					if (m_uartNoDataTimer) {
+						m_uartNoDataTimer->stop();
+						m_uartNoDataTimer->deleteLater();
+						m_uartNoDataTimer = nullptr;
+					}
+
+					m_uartTimer->deleteLater();
+					m_uartTimer = nullptr;
+					m_uartMonitor->disconnect(this);
+					m_uartMonitor->close();
+
+					m_logger->info(kSrc, QStringLiteral(
+							"UART итог: всего=%1 checksum_ok=%2 RMC=%3 GGA=%4 монотон_ошибок=%5")
+							.arg(stats->total).arg(stats->checksumOk)
+							.arg(stats->rmcCount).arg(stats->ggaCount)
+							.arg(stats->monotonErrors));
+
+					StepResult result = StepResult::Pass;
+					QString    detail;
+
+					if (stats->total == 0) {
+						result = StepResult::Fail;
+						detail = "нет данных от порта";
+					} else if (stats->checksumOk == 0) {
+						result = StepResult::Fail;
+						detail = QStringLiteral("все %1 предложений с ошибкой checksum")
+								.arg(stats->total);
+					} else if (stats->ggaCount == 0 && stats->rmcCount == 0) {
+						result = StepResult::Fail;
+						detail = "нет GGA/RMC предложений";
+					} else if (stats->rmcCount == 0) {
+						result = StepResult::Warning;
+						detail = QStringLiteral("нет валидных RMC (возможно битые данные), GGA=%1")
+								.arg(stats->ggaCount);
+					} else if (stats->monotonErrors > 0) {
+						result = StepResult::Warning;
+						detail = QStringLiteral("нарушений монотонности UTC: %1")
+								.arg(stats->monotonErrors);
+					} else {
+						detail = QStringLiteral("RMC=%1 GGA=%2 checksum_ok=%3/%4")
+								.arg(stats->rmcCount).arg(stats->ggaCount)
+								.arg(stats->checksumOk).arg(stats->total);
+					}
+
+					finishCurrentStep(result, detail);
+				});
+		m_uartTimer->start(60000);
+	}
+
+	void MsvScenarioDispatcher::reset()
+	{
+		stopUartMonitoring();
+		ScenarioDispatcher::reset();
+	}
+
+	void MsvScenarioDispatcher::stopUartMonitoring()
+	{
+		if (m_uartTimer) {
+			m_uartTimer->stop();
+			m_uartTimer->deleteLater();
+			m_uartTimer = nullptr;
+		}
+		if (m_uartNoDataTimer) {
+			m_uartNoDataTimer->stop();
+			m_uartNoDataTimer->deleteLater();
+			m_uartNoDataTimer = nullptr;
+		}
+
+		m_uartMonitor->disconnect(this);
+		if (m_uartMonitor->isOpen()) {
+			m_uartMonitor->close();
+			m_logger->info(kSrc, "UART порт закрыт");
+		}
+
 	}
 
 } // namespace Msv::Core

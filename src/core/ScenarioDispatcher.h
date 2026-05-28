@@ -34,6 +34,7 @@ public:
     void reportOperatorFailure(const QString& reason)  override;
 	void continueToNextStep() 						   override;
 	void reset()                                       override;
+	void restartFromStep(int index) override;
 
     [[nodiscard]] DispatcherState       state()            const override;
     [[nodiscard]] int                   currentStepIndex() const override;

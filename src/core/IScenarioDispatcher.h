@@ -78,7 +78,7 @@ public:
     virtual void resume() = 0;          ///< Возобновить из паузы
 	virtual void continueToNextStep() = 0; ///< оператор нажал далее
 	virtual void reset() = 0;           ///< Сброс для повтороного запуска
-
+	virtual void restartFromStep(int index) = 0;
     /// Оператор нажал «Выполнено» — разрешить переход к следующему шагу.
     virtual void confirmOperatorAction() = 0;
 

@@ -179,12 +179,22 @@ void MainWindow::applyTheme()
             border: 1px solid #00e5cc;
 			min-width: 130px;
         }
-		QPushButton#continueBtn: hover {background-color: 1e4570;}
-	    QPushButton#continueBtn: disabled {
+	    QPushButton#continueBtn:disabled {
 	  		background-color: #1a1a1a;
             color: #2a2a2a;
             border: 1px solid #222222;
         }
+
+		QPushButton#continueBtn:pressed {
+			background-color: #0d2040;
+			border-color: #00b8a0;
+			color: #00b8a0;
+		}
+		QPushButton#continueBtn:hover {
+			background-color: #1e4570;
+			border-color: #00ffd8;
+			color: #00ffd8;
+		}
 
         /* ── Прогрессбар ── */
         QProgressBar {
@@ -563,6 +573,11 @@ void MainWindow::connectSignals()
 	connect(m_continueBtn, &QPushButton::clicked,
 			this, &MainWindow::onContinueClicked);
 
+	if(auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher)) {
+		connect(msv, &Core::MsvScenarioDispatcher::portSelectionRequired,
+				this, &MainWindow::onPortSelectionRequired);
+	}
+
     // MsvScenarioDispatcher-специфичный сигнал — подключаем через qobject_cast
     if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher)) {
         connect(msv, &Core::MsvScenarioDispatcher::deviceSelectionRequired,
@@ -630,8 +645,9 @@ void MainWindow::onStepStarted(int idx, const Core::StepDescriptor& desc)
 
     // Промпт для автошагов
     if (desc.type == Core::StepType::Automatic)
-        setPrompt("ВЫПОЛНЯЕТСЯ", desc.description, "#00e5cc");
-
+	{
+		setPrompt("ВЫПОЛНЯЕТСЯ", desc.description, "#00e5cc");
+	}
 	StepDisplayRecord rec;
 	rec.promptHeader = (desc.type == Core::StepType::Automatic)
 					   ? "ВЫПОЛНЯЕТСЯ" : "ТРЕБУЕТСЯ ДЕЙСТВИЕ ОПЕРАТОРА";
@@ -652,8 +668,9 @@ void MainWindow::onStepStarted(int idx, const Core::StepDescriptor& desc)
 void MainWindow::onStepFinished(int idx, Core::StepResult result, const QString& details)
 {
     if (idx < m_stepItems.size())
-        m_stepItems[idx]->setResult(result);
-
+	{
+		m_stepItems[idx]->setResult(result);
+	}
 	// Обновить сохранённую запись — добавить детали результата
 	if (idx < m_stepRecords.size() && !details.isEmpty()) {
 		m_stepRecords[idx].promptBody +=
@@ -820,6 +837,23 @@ void MainWindow::onStepItemClicked(int index)
 		m_stepItems[i]->setActive(i == index &&
 		m_dispatcher->currentStepIndex() == index);
 }
+
+void MainWindow::onPortSelectionRequired()
+{
+	setPrompt("ВЫБОР COM-ПОРТА",
+			  "Выберите порт к которому подключён UART-дубликат GNSS.",
+			  "#00e5cc");
+
+	SerialPortSelectionDialog dlg(this);
+	if (dlg.exec() != QDialog::Accepted) {
+		m_dispatcher->abort();
+		return;
+	}
+
+	if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher))
+		msv->selectPort(dlg.selectedPort(), dlg.selectedBaud());
+}
+
 // Оставляем как заглушку на случай если понадобится напрямую
 void MainWindow::onManualIpRequired() {}
 

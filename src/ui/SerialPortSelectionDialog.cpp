@@ -124,7 +124,7 @@ void SerialPortSelectionDialog::buildUi()
     m_baudCombo = new QComboBox(this);
     for (int baud : {4800, 9600, 19200, 38400, 57600, 115200})
         m_baudCombo->addItem(QString::number(baud), baud);
-    m_baudCombo->setCurrentText("9600");
+    m_baudCombo->setCurrentText("115200");
 
     m_selectBtn = new QPushButton("ВЫБРАТЬ", this);
     m_selectBtn->setObjectName("selectBtn");

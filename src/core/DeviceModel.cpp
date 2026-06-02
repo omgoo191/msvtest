@@ -95,7 +95,7 @@ void DeviceModel::applyWebStatus(const Core::WebStatusData& data)
 		m_snapshot.syncSource     = data.syncSource;
 		m_snapshot.syncStatus     = data.syncStatus;
 		m_snapshot.webTime        = data.webTime;
-		m_snapshot.capturedAt     = QDateTime::currentDateTimeUtc();
+		m_snapshot.webCapturedAt    = QDateTime::currentDateTimeUtc();
 		m_snapshot.macAddress     = data.macAddress;
 		m_snapshot.gpsTime        = data.gpsTime;
 		m_snapshot.gpsDate        = data.gpsDate;

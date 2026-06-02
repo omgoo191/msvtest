@@ -163,4 +163,25 @@ void StepItemWidget::mousePressEvent(QMouseEvent *event)
 	emit clicked(m_index);
 }
 
+void StepItemWidget::enterEvent(QEnterEvent* event)
+{
+	QFrame::enterEvent(event);
+	if (!m_active)
+		setStyleSheet(
+				"StepItemWidget {"
+				"  background-color: #1a1a1a;"
+				"  border-left: 3px solid #303030;"
+				"  border-top: none; border-right: none; border-bottom: none;"
+				"}"
+		);
+	setCursor(Qt::PointingHandCursor);
+}
+
+void StepItemWidget::leaveEvent(QEvent* event)
+{
+	QFrame::leaveEvent(event);
+	refresh();
+	setCursor(Qt::ArrowCursor);
+}
+
 } // namespace Msv::Ui

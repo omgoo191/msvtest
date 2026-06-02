@@ -129,6 +129,32 @@ void MainWindow::applyTheme()
         }
 
         /* ── Кнопки ── */
+
+		QPushButton#restartFromBtn {
+			background-color: transparent;
+			color: #505050;
+			border: 1px solid #2e2e2e;
+		}
+		QPushButton#restartFromBtn:hover { color: #ff9800; border-color: #ff9800; }
+		QPushButton#restartFromBtn:pressed { background-color: #1a1000; }
+		QPushButton#restartFromBtn:disabled {
+			color: #2a2a2a; border-color: #222222;
+		}
+
+		QPushButton#devModeBtn {
+			background-color: transparent;
+			color: #303030;
+			border: 1px solid #282828;
+			font-size: 8pt;
+			letter-spacing: 1px;
+		}
+		QPushButton#devModeBtn:hover   { color: #606060; border-color: #404040; }
+		QPushButton#devModeBtn:checked {
+			background-color: #1a0d00;
+			color: #ff6600;
+			border: 1px solid #ff6600;
+		}
+
         QPushButton {
             border: none;
             border-radius: 4px;
@@ -492,11 +518,24 @@ void MainWindow::buildUi()
 			m_continueBtn->setObjectName("continueBtn");
 			m_continueBtn->setFixedHeight(40);
 
+			m_restartFromBtn = new QPushButton("↺  ОТСЮДА", mainWidget);
+			m_restartFromBtn->setObjectName("restartFromBtn");
+			m_restartFromBtn->setFixedHeight(40);
+			m_restartFromBtn->setEnabled(false);
+
+			m_devModeBtn = new QPushButton("DEV", mainWidget);
+			m_devModeBtn->setObjectName("devModeBtn");
+			m_devModeBtn->setFixedHeight(40);
+			m_devModeBtn->setFixedWidth(56);
+			m_devModeBtn->setCheckable(true);
+
+			btnRow->addWidget(m_restartFromBtn);
 			btnRow->addWidget(m_continueBtn);
             btnRow->addWidget(m_startBtn);
             btnRow->addWidget(m_confirmBtn);
             btnRow->addStretch(1);
             btnRow->addWidget(m_abortBtn);
+			btnRow->addWidget(m_devModeBtn);
             ml->addLayout(btnRow);
         }
 
@@ -582,7 +621,24 @@ void MainWindow::connectSignals()
     if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher)) {
         connect(msv, &Core::MsvScenarioDispatcher::deviceSelectionRequired,
                 this, &MainWindow::onDeviceSelectionRequired);
+
     }
+
+	connect(m_restartFromBtn, &QPushButton::clicked, this, [this]() {
+		if (m_selectedStepIndex < 0) return;
+		for (int i = m_selectedStepIndex; i < m_stepItems.size(); ++i)
+			m_stepItems[i]->setResult(Core::StepResult::NotRun);
+		m_stepRecords = m_stepRecords.mid(0, m_selectedStepIndex);
+		m_viewingStepIndex = -1;
+		m_dispatcher->restartFromStep(m_selectedStepIndex);
+		m_restartFromBtn->setEnabled(false);
+		m_selectedStepIndex = -1;
+	});
+
+	connect(m_devModeBtn, &QPushButton::toggled, this, [this](bool checked) {
+		m_devMode = checked;
+		qDebug() << (checked ? "DEV MODE включён" : "DEV MODE выключен");
+	});
 }
 
 // ── Слоты ─────────────────────────────────────────────────────────────────────
@@ -826,16 +882,47 @@ void MainWindow::onContinueClicked()
 
 void MainWindow::onStepItemClicked(int index)
 {
-	if (index >= m_stepRecords.size()) return;  // шаг ещё не запускался
+	using S = Core::DispatcherState;
+	m_selectedStepIndex = index;
 
-	m_viewingStepIndex = index;
-	const auto& rec = m_stepRecords[index];
-	setPrompt(rec.promptHeader, rec.promptBody, rec.accentColor);
+	// В dev-режиме — сразу запускаем шаг
+	if (m_devMode) {
+		// Сбрасываем UI для этого и последующих шагов
+		for (int i = index; i < m_stepItems.size(); ++i)
+			m_stepItems[i]->setResult(Core::StepResult::NotRun);
+		m_stepRecords = m_stepRecords.mid(0, index);
+		m_viewingStepIndex = -1;
+		m_selectedStepIndex = -1;
+		m_restartFromBtn->setEnabled(false);
 
-	// Подсветить выбранный шаг
+		// Если сценарий не запущен — запустить и сразу прыгнуть
+		using S = Core::DispatcherState;
+		const auto s = m_dispatcher->state();
+		if (s == S::Idle) {
+			m_dispatcher->start();
+			// start() пойдёт с шага 0 — прыгаем на нужный
+		}
+		m_dispatcher->restartFromStep(index);
+		return;
+	}
+
+	// Обычный режим — просмотр
+	if (index < m_stepRecords.size()) {
+		m_viewingStepIndex = index;
+		const auto& rec = m_stepRecords[index];
+		setPrompt(rec.promptHeader, rec.promptBody, rec.accentColor);
+	}
+
 	for (int i = 0; i < m_stepItems.size(); ++i)
 		m_stepItems[i]->setActive(i == index &&
-		m_dispatcher->currentStepIndex() == index);
+								  m_dispatcher->currentStepIndex() == index);
+
+	const auto result = m_dispatcher->stepResults().value(
+			index, Core::StepResult::NotRun);
+	const bool canRestart =
+			result != Core::StepResult::NotRun &&
+			m_dispatcher->state() != S::Idle;
+	m_restartFromBtn->setEnabled(canRestart);
 }
 
 void MainWindow::onPortSelectionRequired()

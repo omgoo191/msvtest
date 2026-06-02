@@ -159,38 +159,39 @@ QString ReportGenerator::buildTimeAnalysis(
     out << "  " << QString(76, '-') << "\n";
 
     // Системное время ПК (опорное)
-    out << QStringLiteral("  %-17s%-31s%s\n")
-        .arg("Система (ПК)")
-        .arg(fmtTime(QDateTime::currentDateTimeUtc()))
-        .arg("(опорное)");
+	out << "  "
+		<< QString("Система (ПК)").leftJustified(17)
+		<< fmtTime(QDateTime::currentDateTimeUtc()).leftJustified(31)
+		<< "(опорное)\n";
 
     // Web-время
     {
-        const qint64 off = offsetMs(snap.webTime, snap.webCapturedAt);
-        out << QStringLiteral("  %-17s%-31s%s\n")
-            .arg("Web (td)")
-            .arg(fmtTime(snap.webTime))
-            .arg(off == LLONG_MIN ? "н/д" : fmtOffset(off));
+		const QDateTime wt = snap.webTime.value_or(QDateTime{});
+        const qint64 off = offsetMs(wt, snap.webCapturedAt);
+		out << "  "
+			<< QString("Web (td)").leftJustified(17)
+			<< fmtTime(wt).leftJustified(31)
+			<< (off == LLONG_MIN ? "н/д" : fmtOffset(off)) << "\n";
     }
 
     // SNTP-время
     {
         const qint64 off = offsetMs(snap.sntpTime.value_or(QDateTime()),
                                     snap.sntpCapturedAt);
-        out << QStringLiteral("  %-17s%-31s%s\n")
-            .arg("SNTP")
-            .arg(fmtTime(snap.sntpTime.value_or(QDateTime())))
-            .arg(fmtOffset(off));
+		out << "  "
+			<< QString("SNTP").leftJustified(17)
+			<< fmtTime(snap.sntpTime.value_or(QDateTime())).leftJustified(31)
+			<< fmtOffset(off) << "\n";
     }
 
     // GNSS UART
     {
         const qint64 off = offsetMs(snap.gnssTime.value_or(QDateTime()),
                                     snap.gnssCapturedAt);
-        out << QStringLiteral("  %-17s%-31s%s\n")
-            .arg("GNSS (UART)")
-            .arg(fmtTime(snap.gnssTime.value_or(QDateTime())))
-            .arg(fmtOffset(off));
+		out << "  "
+			<< QString("GNSS (UART)").leftJustified(17)
+			<< fmtTime(snap.gnssTime.value_or(QDateTime())).leftJustified(31)
+			<< fmtOffset(off) << "\n";
     }
 
     // ── Расхождения между источниками ─────────────────────────────────────────
@@ -209,21 +210,23 @@ QString ReportGenerator::buildTimeAnalysis(
         return offA - offB;
     };
 
-    auto printDiff = [&](const QString& label, qint64 ms) {
-        out << QStringLiteral("  %-32s%s\n")
-            .arg(label)
-            .arg(ms == LLONG_MIN ? "н/д" : fmtOffset(ms));
-    };
+	auto printDiff = [&](const QString& label, qint64 ms) {
+		out << "  "
+			<< label.leftJustified(32)
+			<< (ms == LLONG_MIN ? "н/д" : fmtOffset(ms)) << "\n";
+	};
 
     const auto sntpTime = snap.sntpTime.value_or(QDateTime());
     const auto gnssTime = snap.gnssTime.value_or(QDateTime());
 
+	const QDateTime webTime = snap.webTime.value_or(QDateTime{});
+
     printDiff("Web vs SNTP:",
-        diffMs(snap.webTime, snap.webCapturedAt,
+        diffMs(webTime, snap.webCapturedAt,
                sntpTime,     snap.sntpCapturedAt));
 
     printDiff("Web vs GNSS (UART):",
-        diffMs(snap.webTime, snap.webCapturedAt,
+        diffMs(webTime, snap.webCapturedAt,
                gnssTime,     snap.gnssCapturedAt));
 
     printDiff("SNTP vs GNSS (UART):",

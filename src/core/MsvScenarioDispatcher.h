@@ -8,6 +8,8 @@
 #include "network/WebClient.h"
 #include "network/SntpClient.h"
 #include "serial/UartMonitor.h"
+#include "report/ReportGenerator.h"
+
 namespace Msv::Core {
 
 class MsvScenarioDispatcher : public ScenarioDispatcher {
@@ -29,6 +31,8 @@ public slots:
     void provideManualIp(const QHostAddress& ip);
 
 	void selectPort(const QString& portName, int baudRate);
+
+	void setOperatorName(const QString& name);
 signals:
     /// Сканирование завершено — показать диалог выбора.
     /// Список может быть пустым (ни одного устройства не найдено).
@@ -48,6 +52,7 @@ private:
 	void runKzMonitoring();
 	void runKzRecovery();
 	void stopPollTimer();
+	void runReport();
 
     IDeviceModel*            m_deviceModel  {nullptr};
     Network::WhoIAmScanner*  m_whoIAmScanner{nullptr};
@@ -62,6 +67,9 @@ private:
 	int 					 m_maxPolls       {0};
 	DeviceSnapshot           m_snapshotBeforeKz;
 	DeviceSnapshot           m_snapshotDuringKz;
+	std::unique_ptr<Report::ReportGenerator>  m_reportGenerator {nullptr};
+	QDateTime			     m_sessionStart;
+	QString 				 m_operatorName;
 
     static constexpr const char* kSrc = "MsvDispatcher";
 
@@ -69,6 +77,8 @@ private:
 		int total{0}, checksumOk{0}, rmcCount{0}, ggaCount{0}, monotonErrors{0};
 		QDateTime lastUtc;
 	};
+
+
 };
 
 } // namespace Msv::Core

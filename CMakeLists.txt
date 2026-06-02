@@ -47,18 +47,18 @@ set(SOURCES
     src/network/WhoIAmScanner.cpp
 
     # Шаг 3 — Web + SNTP
-     src/network/WebClient.cpp
-     src/network/SntpClient.cpp
+    src/network/WebClient.cpp
+    src/network/SntpClient.cpp
 
     # Шаг 4 — UART-GNSS
-     src/serial/UartMonitor.cpp
-     src/serial/NmeaParser.cpp
+    src/serial/UartMonitor.cpp
+    src/serial/NmeaParser.cpp
     src/ui/SerialPortSelectionDialog.cpp
     # Шаг 5 — Анализатор
     # src/analysis/DataAnalyzer.cpp
 
     # Шаг 6 — Отчёт
-    # src/report/ReportGenerator.cpp
+    src/report/ReportGenerator.cpp
 )
 
 qt6_add_executable(MsvTester ${SOURCES})

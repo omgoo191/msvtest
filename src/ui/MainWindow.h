@@ -98,6 +98,12 @@ private:
 
 	QPushButton* m_continueBtn {nullptr};
 
+	QPushButton* m_restartFromBtn {nullptr};
+	int          m_selectedStepIndex {-1};
+
+	QPushButton* m_devModeBtn  {nullptr};
+	bool         m_devMode     {false};
+
 	struct StepDisplayRecord {
 		QString promptHeader;
 		QString promptBody;

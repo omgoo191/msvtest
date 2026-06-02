@@ -16,11 +16,16 @@ MsvScenarioDispatcher::MsvScenarioDispatcher(
 	m_webClient = new Network::WebClient(logger, this);
 	m_sntpClient = new Network::SntpClient(logger, this);
 	m_uartMonitor = new Serial::UartMonitor(logger, this);
+	m_reportGenerator = std::make_unique<Report::ReportGenerator>(logger);
+	m_sessionStart = QDateTime::currentDateTimeUtc();
 
 }
 
 void MsvScenarioDispatcher::executeStep(int stepIndex)
 {
+	if(stepIndex == 0)
+		m_sessionStart = QDateTime::currentDateTimeUtc();
+
 	if(stepIndex !=4)
 		stopUartMonitoring();
 
@@ -33,6 +38,7 @@ void MsvScenarioDispatcher::executeStep(int stepIndex)
 		case 4: runUartMonitor(); break;
 		case 6: runKzMonitoring(); break;
 		case 8: runKzRecovery(); break;
+		case 9: runReport(); break;
 		default: ScenarioDispatcher::executeStep(stepIndex); break;
     }
 }
@@ -579,6 +585,36 @@ void MsvScenarioDispatcher::runKzRecovery()
 	});
 
 	m_pollTimer->start();
+}
+
+void MsvScenarioDispatcher::runReport()
+{
+	m_logger->info(kSrc, "Формирование отчёта...");
+
+	Report::SessionData session;
+	session.operatorName = m_operatorName;
+	session.sessionStart = m_sessionStart;
+	session.sessionEnd   = QDateTime::currentDateTimeUtc();
+
+	const QString filename = QStringLiteral("msv_report_%1.txt")
+			.arg(session.sessionStart.toString("yyyyMMdd_HHmmss"));
+
+	const bool ok = m_reportGenerator->generate(
+			session,
+			m_deviceModel->currentSnapshot(),
+			this,
+			filename
+	);
+
+	finishCurrentStep(
+			ok ? StepResult::Pass : StepResult::Fail,
+			ok ? QStringLiteral("сохранён: %1").arg(filename) : "ошибка записи файла"
+	);
+}
+
+void MsvScenarioDispatcher::setOperatorName(const QString& name)
+{
+	m_operatorName = name;
 }
 
 } // namespace Msv::Core

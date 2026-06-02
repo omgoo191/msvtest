@@ -25,6 +25,8 @@ public:
 
 protected:
 	void mousePressEvent(QMouseEvent* event) override;
+	void enterEvent(QEnterEvent* event) override;
+	void leaveEvent(QEvent* event) override;
 
 private:
     void refresh();

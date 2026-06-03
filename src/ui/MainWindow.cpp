@@ -487,7 +487,14 @@ void MainWindow::buildUi()
             card->setProperty("promptEdit", QVariant::fromValue<QObject*>(promptEdit));
             m_promptBody = nullptr; // больше не используем m_promptBody напрямую
 
-            cl->addWidget(m_promptHeader);
+            auto* promptHeaderRow = new QHBoxLayout;
+			promptHeaderRow->setContentsMargins(0, 0, 0, 0);
+			promptHeaderRow->addWidget(m_promptHeader, 1);
+			m_antennaIndicator = new QLabel(card);
+			m_antennaIndicator->setText("АНТЕННА: -");
+			m_antennaIndicator->setStyleSheet("color: #404040; font-size: 8pt; font-weight: bold; letter-spacing: 1px;");
+			promptHeaderRow->addWidget(m_antennaIndicator);
+			cl->addLayout(promptHeaderRow);
             cl->addWidget(promptEdit, 1);
             ml->addWidget(card, 1);
 
@@ -755,6 +762,27 @@ void MainWindow::onSnapshotChanged(const Core::DeviceSnapshot& snap)
         "font-family: 'JetBrains Mono', 'Consolas', monospace;"
 		"background-color: transparent;"
     );
+
+	if (!snap.antennaStatus.isEmpty()) {
+		struct AntennaStyle { QString color; QString prefix; };
+		AntennaStyle style;
+
+		const QString s = snap.antennaStatus.toLower();
+		if (s.contains("короткое") || s.contains("замыкание")) {
+			style = {"#f44336", "⚡ КЗ: "};
+		} else if (s.contains("не подключена") || s.contains("отключена")) {
+			style = {"#ff9800", "○ АНТЕННА: "};
+		} else if (s.contains("подключена")) {
+			style = {"#4caf50", "● АНТЕННА: "};
+		} else {
+			style = {"#606060", "● АНТЕННА: "};
+		}
+
+		m_antennaIndicator->setText(style.prefix + snap.antennaStatus);
+		m_antennaIndicator->setStyleSheet(QStringLiteral(
+												  "color: %1; font-size: 8pt; font-weight: bold; letter-spacing: 1px;")
+												  .arg(style.color));
+	}
 }
 
 void MainWindow::onLogEntryAdded(const Core::LogEntry& entry)

@@ -110,6 +110,8 @@ private:
 		QString accentColor;
 	};
 
+	QLabel* m_antennaIndicator {nullptr};
+
 	QList<StepDisplayRecord> m_stepRecords;
 	int                      m_viewingStepIndex {-1};
 };

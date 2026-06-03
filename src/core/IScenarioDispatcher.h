@@ -113,6 +113,9 @@ signals:
 
     /// Прогресс: [0..100]
     void progressChanged(int percent);
+
+	/// Живые данные во время выполнения шага для сводки
+	void stepProgressUpdate(int stepIndex,const QString& details);
 };
 
 } // namespace Msv::Core

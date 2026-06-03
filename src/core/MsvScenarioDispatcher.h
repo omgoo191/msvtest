@@ -53,6 +53,8 @@ private:
 	void runKzRecovery();
 	void stopPollTimer();
 	void runReport();
+	void startBackgroundPolling();
+	void stopBackgroundPolling();
 
     IDeviceModel*            m_deviceModel  {nullptr};
     Network::WhoIAmScanner*  m_whoIAmScanner{nullptr};
@@ -70,6 +72,7 @@ private:
 	std::unique_ptr<Report::ReportGenerator>  m_reportGenerator {nullptr};
 	QDateTime			     m_sessionStart;
 	QString 				 m_operatorName;
+	QTimer*				     m_backgroundPollTimer {nullptr};
 
     static constexpr const char* kSrc = "MsvDispatcher";
 

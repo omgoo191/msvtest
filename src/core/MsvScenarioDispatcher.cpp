@@ -87,6 +87,8 @@ void MsvScenarioDispatcher::selectDevice(const Network::WhoIAmResponse& device)
             .arg(device.ipAddress.toString(), device.firmwareVersion)
             .arg(device.deviceId)
     );
+
+	startBackgroundPolling();
 }
 
 void MsvScenarioDispatcher::provideManualIp(const QHostAddress& ip)
@@ -99,6 +101,8 @@ void MsvScenarioDispatcher::provideManualIp(const QHostAddress& ip)
         StepResult::Warning,
         QStringLiteral("ручной IP: %1").arg(ip.toString())
     );
+
+	startBackgroundPolling();
 }
 
 void MsvScenarioDispatcher::runWebStatus()
@@ -355,6 +359,7 @@ void MsvScenarioDispatcher::reset()
 	stopPollTimer();
 	stopUartMonitoring();
 	ScenarioDispatcher::reset();
+	stopBackgroundPolling();
 }
 
 void MsvScenarioDispatcher::stopUartMonitoring()
@@ -616,5 +621,67 @@ void MsvScenarioDispatcher::setOperatorName(const QString& name)
 {
 	m_operatorName = name;
 }
+
+	void MsvScenarioDispatcher::startBackgroundPolling()
+	{
+		stopBackgroundPolling();
+
+		m_backgroundPollTimer = new QTimer(this);
+		m_backgroundPollTimer->setInterval(5000);
+
+		connect(m_backgroundPollTimer, &QTimer::timeout, this, [this]()
+		{
+			// Не мешаем шагам которые сами делают web-запросы
+			const int idx = m_currentIdx;
+			if (idx == 1 || idx == 6 || idx == 8) return;
+
+			if (!m_deviceModel->isDeviceFound()) return;
+
+			const QHostAddress ip = m_deviceModel->currentSnapshot().ipAddress;
+
+			// Используем отдельный клиент чтобы не мешать основному
+			auto* bgClient = new Network::WebClient(m_logger, this);
+
+			connect(bgClient, &Network::WebClient::finished,
+					this, [this, bgClient](const Network::WebClient::Result& res)
+					{
+						bgClient->deleteLater();
+
+						// Обновляем только статус антенны и GPS — не перезаписываем
+						// всю модель чтобы не сбить capturedAt основных шагов
+						Core::WebStatusData data = {};
+						data.syncSource    = res.syncSource;
+						data.syncStatus    = res.syncStatus;
+						data.webTime       = res.webTime;
+						data.antennaStatus = res.antennaStatus;
+						data.gpsStatus     = res.gpsStatus;
+						data.gpsSatellites = res.gpsSatellites;
+						data.rtcValidity   = res.rtcValidity;
+						data.macAddress    = res.macAddress;
+						m_deviceModel->applyWebStatus(data);
+					}, Qt::QueuedConnection);
+
+			connect(bgClient, &Network::WebClient::failed,
+					this, [bgClient](const QString&)
+					{
+						bgClient->deleteLater();
+					}, Qt::QueuedConnection);
+
+			bgClient->request(ip, "/tags.shtml");
+		});
+
+		m_backgroundPollTimer->start();
+		m_logger->info(kSrc, "Фоновый мониторинг запущен (каждые 5 сек)");
+	}
+
+	void MsvScenarioDispatcher::stopBackgroundPolling()
+	{
+		if (m_backgroundPollTimer) {
+			m_backgroundPollTimer->stop();
+			m_backgroundPollTimer->deleteLater();
+			m_backgroundPollTimer = nullptr;
+			m_logger->info(kSrc, "Фоновый мониторинг остановлен");
+		}
+	}
 
 } // namespace Msv::Core

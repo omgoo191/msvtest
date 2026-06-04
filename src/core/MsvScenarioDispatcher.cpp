@@ -207,11 +207,11 @@ void MsvScenarioDispatcher::runSntp()
 				m_deviceModel->applySntpData(res.transmitTime, res.leapIndicator, res.stratum);
 
 				StepResult result = StepResult::Pass;
-				QString    detail = QStringLiteral("time=%1  LI=%2  stratum=%3  RTT=%.0f ms")
+				QString    detail = QStringLiteral("time=%1  LI=%2  stratum=%3  RTT=%4 ms")
 						.arg(res.transmitTime.toString("hh:mm:ss.zzz"))
 						.arg(res.leapIndicator)
 						.arg(res.stratum)
-						.arg(res.roundTripMs);
+						.arg(QString::number(res.roundTripMs, 'f', 1));
 
 				if (res.leapIndicator == 3) {
 					result = StepResult::Warning;
@@ -271,6 +271,18 @@ void MsvScenarioDispatcher::selectPort(const QString& portName, int baudRate)
 				}
 				if (r.utcTime.isValid())
 					stats->lastUtc = r.utcTime;
+
+				if (stats->total % 10 == 0) {  // каждые 10 предложений
+					emit stepProgressUpdate(m_currentIdx, QStringLiteral(
+							"Получено: %1  RMC: %2  GGA: %3  Ошибок: %4\nПоследнее UTC: %5")
+							.arg(stats->total)
+							.arg(stats->rmcCount)
+							.arg(stats->ggaCount)
+							.arg(stats->total - stats->checksumOk)
+							.arg(stats->lastUtc.isValid()
+								 ? stats->lastUtc.toString("HH:mm:ss.zzz")
+								 : "—"));
+				}
 
 				if (r.isValid && r.utcTime.isValid())
 					m_deviceModel->applyGnssTime(r.utcTime);
@@ -476,6 +488,16 @@ void MsvScenarioDispatcher::runKzMonitoring()
 							.arg(res.antennaStatus)
 							.arg(static_cast<int>(res.syncStatus)));
 
+					emit stepProgressUpdate(m_currentIdx, QStringLiteral(
+						"Опрос: %1/%2\nАнтенна: %3\nSync: %4\nGPS: %5")
+						.arg(stats->pollsDone)
+						.arg(m_maxPolls)
+						.arg(res.antennaStatus)
+						.arg(res.syncStatus == Core::SyncStatus::Synchronized ? "Synchronized" :
+							 res.syncStatus == Core::SyncStatus::Holdover     ? "Holdover"     :
+							 res.syncStatus == Core::SyncStatus::Freerun      ? "Freerun"      : "—")
+						.arg(res.gpsStatus));
+
 					// Конец мониторинга
 					if (stats->pollsDone >= m_maxPolls) {
 						stopPollTimer();
@@ -535,13 +557,15 @@ void MsvScenarioDispatcher::runKzRecovery()
 	m_pollTimer = new QTimer(this);
 	m_pollTimer->setInterval(15000);
 
-	connect(m_pollTimer, &QTimer::timeout, this, [this, ip]()
+	const QDateTime recoveryStart = QDateTime::currentDateTimeUtc();
+
+	connect(m_pollTimer, &QTimer::timeout, this, [this, ip, recoveryStart]()
 	{
 		m_pollCount++;
 
 		m_webClient->disconnect(this);
 		connect(m_webClient, &Network::WebClient::finished,
-				this, [this](const Network::WebClient::Result& res)
+				this, [this, &recoveryStart](const Network::WebClient::Result& res)
 				{
 					m_webClient->disconnect(this);
 
@@ -564,11 +588,22 @@ void MsvScenarioDispatcher::runKzRecovery()
 							.arg(res.gpsStatus)
 							.arg(static_cast<int>(res.syncStatus)));
 
+					emit stepProgressUpdate(m_currentIdx, QStringLiteral(
+						"Опрос: %1/%2\nGPS: %3\nАнтенна: %4\nSync: %5")
+						.arg(m_pollCount)
+						.arg(m_maxPolls)
+						.arg(res.gpsStatus)
+						.arg(res.antennaStatus)
+						.arg(res.syncStatus == Core::SyncStatus::Synchronized ? "Synchronized" :
+							 res.syncStatus == Core::SyncStatus::Holdover     ? "Holdover"     :
+							 res.syncStatus == Core::SyncStatus::Freerun      ? "Freerun"      : "—"));
+
+					const int elaspedSec = static_cast<int>(recoveryStart.secsTo(QDateTime::currentDateTimeUtc()));
 					if (recovered) {
 						stopPollTimer();
 						finishCurrentStep(StepResult::Pass,
 										  QStringLiteral("GNSS восстановлен через ~%1 с")
-												  .arg(m_pollCount * 15));
+												  .arg(elaspedSec));
 						return;
 					}
 

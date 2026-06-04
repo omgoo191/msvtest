@@ -23,6 +23,7 @@
 #include <QStatusBar>
 #include <QFont>
 #include <QFontDatabase>
+#include <QScrollBar>
 
 namespace Msv::Ui {
 
@@ -420,134 +421,141 @@ void MainWindow::buildUi()
 
     // ── ГЛАВНАЯ ПАНЕЛЬ ───────────────────────────────────────────────────────
     {
-        auto* mainWidget = new QWidget(hSplit);
-        auto* ml = new QVBoxLayout(mainWidget);
-        ml->setContentsMargins(28, 24, 28, 20);
-        ml->setSpacing(16);
+		m_rightTabs = new QTabWidget(hSplit);
+		m_rightTabs->setObjectName("rightTabs");
 
-        // Заголовок текущего шага
-        {
-            auto* stepHeader = new QWidget(mainWidget);
-            auto* hl = new QHBoxLayout(stepHeader);
-            hl->setContentsMargins(0, 0, 0, 0);
-            hl->setSpacing(16);
+		auto* mainWidget = new QWidget(m_rightTabs);
+		auto* ml = new QVBoxLayout(mainWidget);
+		ml->setContentsMargins(28, 24, 28, 20);
+		ml->setSpacing(16);
 
-            m_stepIndexLabel = new QLabel("—", stepHeader);
-            m_stepIndexLabel->setObjectName("stepIndex");
-            m_stepIndexLabel->setFixedWidth(52);
+		// Заголовок текущего шага
+		{
+			auto* stepHeader = new QWidget(mainWidget);
+			auto* hl = new QHBoxLayout(stepHeader);
+			hl->setContentsMargins(0, 0, 0, 0);
+			hl->setSpacing(16);
 
-            auto* titleCol = new QVBoxLayout;
-            titleCol->setSpacing(4);
+			m_stepIndexLabel = new QLabel("—", stepHeader);
+			m_stepIndexLabel->setObjectName("stepIndex");
+			m_stepIndexLabel->setFixedWidth(52);
 
-            m_stepTitleLabel = new QLabel("Ожидание запуска", stepHeader);
-            m_stepTitleLabel->setObjectName("stepTitle");
+			auto* titleCol = new QVBoxLayout;
+			titleCol->setSpacing(4);
 
-            m_stepTypeLabel  = new QLabel("", stepHeader);
-            m_stepTypeLabel->setObjectName("stepType");
+			m_stepTitleLabel = new QLabel("Ожидание запуска", stepHeader);
+			m_stepTitleLabel->setObjectName("stepTitle");
 
-            titleCol->addWidget(m_stepTitleLabel);
-            titleCol->addWidget(m_stepTypeLabel);
+			m_stepTypeLabel = new QLabel("", stepHeader);
+			m_stepTypeLabel->setObjectName("stepType");
 
-            hl->addWidget(m_stepIndexLabel);
-            hl->addLayout(titleCol, 1);
-            ml->addWidget(stepHeader);
-        }
+			titleCol->addWidget(m_stepTitleLabel);
+			titleCol->addWidget(m_stepTypeLabel);
 
-        // Карточка инструкции
-        {
-            auto* card = new QFrame(mainWidget);
-            card->setObjectName("card");
-            card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-            auto* cl = new QVBoxLayout(card);
-            cl->setContentsMargins(18, 14, 18, 14);
-            cl->setSpacing(8);
+			hl->addWidget(m_stepIndexLabel);
+			hl->addLayout(titleCol, 1);
+			ml->addWidget(stepHeader);
+		}
 
-            m_promptHeader = new QLabel("ИНСТРУКЦИЯ", card);
-            m_promptHeader->setObjectName("promptHeader");
+		// Карточка инструкции
+		{
+			auto* card = new QFrame(mainWidget);
+			card->setObjectName("card");
+			card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+			auto* cl = new QVBoxLayout(card);
+			cl->setContentsMargins(18, 14, 18, 14);
+			cl->setSpacing(8);
 
-            // QTextEdit вместо QLabel — нет проблем с переносом и выходом текста за края
-            auto* promptEdit = new QTextEdit(card);
-            promptEdit->setObjectName("promptBody");
-            promptEdit->setReadOnly(true);
-            promptEdit->setFrameShape(QFrame::NoFrame);
-            promptEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-            promptEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-            promptEdit->setStyleSheet(
-                "QTextEdit#promptBody {"
-                "  background: transparent;"
-                "  color: #c0c0c0;"
-                "  font-size: 11pt;"
-                "  font-family: 'Segoe UI', Arial, sans-serif;"
-                "  border: none;"
-                "  padding: 0px;"
-                "}"
-            );
-            promptEdit->setPlainText("Нажмите «ЗАПУСТИТЬ» для начала сценария проверки.");
-            // Сохраняем указатель через динамическое свойство для setPrompt()
-            card->setProperty("promptEdit", QVariant::fromValue<QObject*>(promptEdit));
-            m_promptBody = nullptr; // больше не используем m_promptBody напрямую
-
-            auto* promptHeaderRow = new QHBoxLayout;
+			auto* promptHeaderRow = new QHBoxLayout;
 			promptHeaderRow->setContentsMargins(0, 0, 0, 0);
+
+			m_promptHeader = new QLabel("ИНСТРУКЦИЯ", card);
+			m_promptHeader->setObjectName("promptHeader");
 			promptHeaderRow->addWidget(m_promptHeader, 1);
+
 			m_antennaIndicator = new QLabel(card);
-			m_antennaIndicator->setText("АНТЕННА: -");
-			m_antennaIndicator->setStyleSheet("color: #404040; font-size: 8pt; font-weight: bold; letter-spacing: 1px;");
+			m_antennaIndicator->setText("АНТЕННА: —");
+			m_antennaIndicator->setStyleSheet(
+					"color: #404040; font-size: 8pt; font-weight: bold; letter-spacing: 1px;");
 			promptHeaderRow->addWidget(m_antennaIndicator);
 			cl->addLayout(promptHeaderRow);
-            cl->addWidget(promptEdit, 1);
-            ml->addWidget(card, 1);
 
-            // Сохраняем edit в поле для использования в setPrompt
-            // Переопределяем через лямбду — храним указатель в m_promptBody как QLabel*
-            // HACK: используем setObjectName чтобы найти виджет позже через findChild
-            promptEdit->setObjectName("thePromptEdit");
-        }
+			auto* promptEdit = new QTextEdit(card);
+			promptEdit->setObjectName("thePromptEdit");
+			promptEdit->setReadOnly(true);
+			promptEdit->setFrameShape(QFrame::NoFrame);
+			promptEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+			promptEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+			promptEdit->setStyleSheet(
+					"QTextEdit#thePromptEdit {"
+					"  background: transparent; color: #c0c0c0;"
+					"  font-size: 11pt; border: none; padding: 0px;"
+					"}"
+			);
+			promptEdit->setPlainText("Нажмите «ЗАПУСТИТЬ» для начала сценария проверки.");
+			m_promptBody = nullptr;
+			cl->addWidget(promptEdit, 1);
+			ml->addWidget(card, 1);
+		}
 
-        // Кнопки
-        {
-            auto* btnRow = new QHBoxLayout;
-            btnRow->setSpacing(10);
+		// Кнопки
+		{
+			auto* btnRow = new QHBoxLayout;
+			btnRow->setSpacing(10);
 
-            m_startBtn   = new QPushButton("▶   ЗАПУСТИТЬ", mainWidget);
-            m_confirmBtn = new QPushButton("✔   ВЫПОЛНЕНО", mainWidget);
-            m_abortBtn   = new QPushButton("ПРЕРВАТЬ", mainWidget);
+			m_startBtn       = new QPushButton("▶   ЗАПУСТИТЬ", mainWidget);
+			m_confirmBtn     = new QPushButton("✔   ВЫПОЛНЕНО", mainWidget);
+			m_abortBtn       = new QPushButton("ПРЕРВАТЬ",      mainWidget);
+			m_continueBtn    = new QPushButton("ДАЛЕЕ",         mainWidget);
+			m_restartFromBtn = new QPushButton("↺  ОТСЮДА",    mainWidget);
+			m_devModeBtn     = new QPushButton("DEV",           mainWidget);
 
-            m_startBtn  ->setObjectName("startBtn");
-            m_confirmBtn->setObjectName("confirmBtn");
-            m_abortBtn  ->setObjectName("abortBtn");
-
-            m_startBtn  ->setFixedHeight(40);
-            m_confirmBtn->setFixedHeight(40);
-            m_abortBtn  ->setFixedHeight(40);
-
-			m_continueBtn = new QPushButton("ДАЛЕЕ", mainWidget);
-			m_continueBtn->setObjectName("continueBtn");
-			m_continueBtn->setFixedHeight(40);
-
-			m_restartFromBtn = new QPushButton("↺  ОТСЮДА", mainWidget);
+			m_startBtn      ->setObjectName("startBtn");
+			m_confirmBtn    ->setObjectName("confirmBtn");
+			m_abortBtn      ->setObjectName("abortBtn");
+			m_continueBtn   ->setObjectName("continueBtn");
 			m_restartFromBtn->setObjectName("restartFromBtn");
-			m_restartFromBtn->setFixedHeight(40);
-			m_restartFromBtn->setEnabled(false);
+			m_devModeBtn    ->setObjectName("devModeBtn");
 
-			m_devModeBtn = new QPushButton("DEV", mainWidget);
-			m_devModeBtn->setObjectName("devModeBtn");
-			m_devModeBtn->setFixedHeight(40);
-			m_devModeBtn->setFixedWidth(56);
+			for (auto* btn : {m_startBtn, m_confirmBtn, m_abortBtn,
+							  m_continueBtn, m_restartFromBtn})
+				btn->setFixedHeight(40);
+
+			m_devModeBtn->setFixedSize(56, 40);
 			m_devModeBtn->setCheckable(true);
+			m_restartFromBtn->setEnabled(false);
 
 			btnRow->addWidget(m_restartFromBtn);
 			btnRow->addWidget(m_continueBtn);
-            btnRow->addWidget(m_startBtn);
-            btnRow->addWidget(m_confirmBtn);
-            btnRow->addStretch(1);
-            btnRow->addWidget(m_abortBtn);
+			btnRow->addWidget(m_startBtn);
+			btnRow->addWidget(m_confirmBtn);
+			btnRow->addStretch(1);
+			btnRow->addWidget(m_abortBtn);
 			btnRow->addWidget(m_devModeBtn);
-            ml->addLayout(btnRow);
-        }
+			ml->addLayout(btnRow);
+		}
 
-        hSplit->addWidget(mainWidget);
-    }
+		// Вкладка сводки
+		auto* summaryWidget = new QWidget(m_rightTabs);
+		auto* summaryLayout = new QVBoxLayout(summaryWidget);
+		summaryLayout->setContentsMargins(0, 0, 0, 0);
+
+		m_summaryView = new QTextEdit(summaryWidget);
+		m_summaryView->setObjectName("summaryView");
+		m_summaryView->setReadOnly(true);
+		m_summaryView->setStyleSheet(
+				"QTextEdit#summaryView {"
+				"  background-color: #0e0e0e; border: none;"
+				"  color: #c0c0c0; padding: 12px;"
+				"}"
+		);
+		summaryLayout->addWidget(m_summaryView);
+
+		m_rightTabs->addTab(mainWidget,    "  ИНСТРУКЦИЯ  ");
+		m_rightTabs->addTab(summaryWidget, "  СВОДКА  ");
+
+		hSplit->addWidget(m_rightTabs);
+	}
 
     hSplit->setStretchFactor(0, 0);
     hSplit->setStretchFactor(1, 1);
@@ -582,6 +590,9 @@ void MainWindow::buildUi()
         vSplit->addWidget(logFrame);
     }
 
+
+
+
     vSplit->setStretchFactor(0, 3);
     vSplit->setStretchFactor(1, 1);
 
@@ -596,7 +607,8 @@ void MainWindow::connectSignals()
     connect(m_startBtn,   &QPushButton::clicked, this, &MainWindow::onStartClicked);
     connect(m_confirmBtn, &QPushButton::clicked, this, &MainWindow::onConfirmClicked);
     connect(m_abortBtn,   &QPushButton::clicked, this, &MainWindow::onAbortClicked);
-
+	connect(m_dispatcher, &Core::IScenarioDispatcher::stepProgressUpdate,
+			this, &MainWindow::onStepProgressUpdate);
     connect(m_dispatcher, &Core::IScenarioDispatcher::stateChanged,
             this, &MainWindow::onStateChanged);
     connect(m_dispatcher, &Core::IScenarioDispatcher::stepStarted,
@@ -726,6 +738,17 @@ void MainWindow::onStepStarted(int idx, const Core::StepDescriptor& desc)
 	// Если смотрим live — обновить отображение
 	if (m_viewingStepIndex == -1)
 		setPrompt(rec.promptHeader, rec.promptBody, rec.accentColor);
+
+	// Создать запись сводки для нового шага
+	StepSummaryRecord sumRec;
+	sumRec.index  = idx;
+	sumRec.title  = desc.title;
+	sumRec.result = Core::StepResult::NotRun;
+	if (idx < m_summaryRecords.size())
+		m_summaryRecords[idx] = sumRec;
+	else
+		m_summaryRecords.append(sumRec);
+	rebuildSummary();
 }
 
 void MainWindow::onStepFinished(int idx, Core::StepResult result, const QString& details)
@@ -739,6 +762,13 @@ void MainWindow::onStepFinished(int idx, Core::StepResult result, const QString&
 		m_stepRecords[idx].promptBody +=
 				QStringLiteral("\n\n▸ %1").arg(details);
 	}
+
+	if (idx < m_summaryRecords.size()) {
+		m_summaryRecords[idx].result  = result;
+		m_summaryRecords[idx].details = details;
+		m_summaryRecords[idx].liveDetails.clear();
+	}
+	rebuildSummary();
 }
 
 void MainWindow::onOperatorActionRequired(int, const Core::StepDescriptor& desc)
@@ -972,5 +1002,85 @@ void MainWindow::onPortSelectionRequired()
 // Оставляем как заглушку на случай если понадобится напрямую
 void MainWindow::onManualIpRequired() {}
 
+void MainWindow::onStepProgressUpdate(int stepIndex, const QString& details)
+{
+	if (stepIndex < m_summaryRecords.size())
+		m_summaryRecords[stepIndex].liveDetails = details;
+	else {
+		StepSummaryRecord rec;
+		rec.index       = stepIndex;
+		rec.title       = m_dispatcher->allSteps().value(stepIndex).title;
+		rec.liveDetails = details;
+		m_summaryRecords.append(rec);
+	}
+	rebuildSummary();
+	// Переключить на сводку во время выполнения
+	m_rightTabs->setCurrentIndex(1);
+}
+
+void MainWindow::rebuildSummary()
+{
+	QString html;
+	html += "<html><body style='background:#0e0e0e; color:#c0c0c0;"
+			" font-family:Segoe UI,Arial; font-size:10pt; margin:0; padding:0;'>";
+
+	for (const auto& rec : m_summaryRecords) {
+		// Иконка и цвет
+		QString icon, color;
+		switch (rec.result) {
+			case Core::StepResult::Pass:
+				icon = "✔"; color = "#4caf50"; break;
+			case Core::StepResult::Fail:
+				icon = "✖"; color = "#f44336"; break;
+			case Core::StepResult::Warning:
+				icon = "⚠"; color = "#ff9800"; break;
+			default:
+				icon = "●"; color = "#00e5cc"; break;
+		}
+
+		const bool isRunning = rec.result == Core::StepResult::NotRun
+							   && !rec.liveDetails.isEmpty();
+
+		html += QStringLiteral(
+				"<div style='padding:10px 16px; border-bottom:1px solid #1a1a1a;'>"
+				"<span style='color:%1; font-size:14pt;'>%2</span>"
+				"&nbsp;&nbsp;"
+				"<span style='color:#e0e0e0; font-weight:bold;'>%3. %4</span>")
+				.arg(color, icon)
+				.arg(rec.index + 1)
+				.arg(rec.title.toHtmlEscaped());
+
+		// Детали результата
+		if (!rec.details.isEmpty()) {
+			html += QStringLiteral(
+					"<div style='color:#707070; font-size:9pt;"
+					" margin-top:4px; margin-left:28px;'>%1</div>")
+					.arg(rec.details.toHtmlEscaped());
+		}
+
+		// Живые данные
+		if (isRunning && !rec.liveDetails.isEmpty()) {
+			const QString liveHtml = rec.liveDetails
+										.toHtmlEscaped()
+										.replace(QLatin1String("\n"), QLatin1String("<br>"));
+			html += QStringLiteral(
+					"<div style='color:#00e5cc; font-size:9pt;"
+					" font-family:Consolas,monospace;"
+					" margin-top:6px; margin-left:28px;"
+					" padding:6px; background:#0a1a1a;"
+					" border-left:2px solid #00e5cc;'>%1</div>")
+					.arg(liveHtml);
+		}
+
+		html += "</div>";
+	}
+
+	html += "</body></html>";
+	m_summaryView->setHtml(html);
+
+	// Скроллить вниз к активному шагу
+	m_summaryView->verticalScrollBar()->setValue(
+			m_summaryView->verticalScrollBar()->maximum());
+}
 
 } // namespace Msv::Ui

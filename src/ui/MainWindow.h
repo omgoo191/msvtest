@@ -5,6 +5,7 @@
 #include <memory>
 #include "network/WhoIAmTypes.h"
 #include "ui/SerialPortSelectionDialog.h"
+#include "core/IScenarioDispatcher.h"
 
 namespace Msv::Core {
     class IScenarioDispatcher;
@@ -57,6 +58,7 @@ private slots:
     void onContinueClicked();
 	void onStepItemClicked(int index);
 	void onPortSelectionRequired();
+	void onStepProgressUpdate(int stepIndex, const QString& details);
 
 private:
     void buildUi();
@@ -65,6 +67,7 @@ private:
     void updateButtons();
     void setStatusIndicator(const QString& text, const QString& color);
     void setPrompt(const QString& header, const QString& body, const QString& accentColor);
+	void rebuildSummary();
 
     // ── Top bar ───────────────────────────────────────────────────────────────
     QLabel*       m_deviceLabel   {nullptr};
@@ -111,6 +114,19 @@ private:
 	};
 
 	QLabel* m_antennaIndicator {nullptr};
+
+	QTabWidget* m_rightTabs    {nullptr};
+	QTextEdit*  m_summaryView {nullptr};
+
+	struct StepSummaryRecord {
+		int			 	 index;
+		QString			 title;
+		Core::StepResult result {Core::StepResult::NotRun};
+		QString 		 details;
+		QString			 liveDetails;
+	};
+
+	QList<StepSummaryRecord> m_summaryRecords;
 
 	QList<StepDisplayRecord> m_stepRecords;
 	int                      m_viewingStepIndex {-1};

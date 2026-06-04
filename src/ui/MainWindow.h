@@ -6,6 +6,7 @@
 #include "network/WhoIAmTypes.h"
 #include "ui/SerialPortSelectionDialog.h"
 #include "core/IScenarioDispatcher.h"
+#include "ui/LongRunSetupDialog.h"
 
 namespace Msv::Core {
     class IScenarioDispatcher;
@@ -59,6 +60,7 @@ private slots:
 	void onStepItemClicked(int index);
 	void onPortSelectionRequired();
 	void onStepProgressUpdate(int stepIndex, const QString& details);
+	void onLongRunClicked();
 
 private:
     void buildUi();
@@ -130,6 +132,9 @@ private:
 
 	QList<StepDisplayRecord> m_stepRecords;
 	int                      m_viewingStepIndex {-1};
+
+	QPushButton*             m_longRunBtn {nullptr};
+	LongRunSetupDialog* 		 m_longRunDialog {nullptr};
 };
 
 } // namespace Msv::Ui

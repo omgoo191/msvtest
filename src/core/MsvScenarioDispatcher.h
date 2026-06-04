@@ -9,6 +9,7 @@
 #include "network/SntpClient.h"
 #include "serial/UartMonitor.h"
 #include "report/ReportGenerator.h"
+#include "core/LongRunMonitor.h"
 
 namespace Msv::Core {
 
@@ -21,6 +22,9 @@ public:
                                    const Network::WhoIAmConfig&    whoIAmConfig = {},
                                    QObject*                        parent = nullptr);
     ~MsvScenarioDispatcher() override = default;
+	void startLongRun(int durationMinutes);
+	void stopLongRun();
+	void setLongRunActive(bool active) { m_longRunActive = active; }
 
 
 public slots:
@@ -38,6 +42,10 @@ signals:
     /// Список может быть пустым (ни одного устройства не найдено).
     void deviceSelectionRequired(const Msv::Network::WhoIAmResponseList& found);
 	void portSelectionRequired();
+	void longRunProgressUpdate(int elapsedSec, int totalSec, const QString& stats);
+	void longRunFinished(const Msv::Core::LongRunResult& result);
+	void longRunPortSelectionRequired();
+	void longRunDisplayUpdate(const QString& stats);
 
 protected:
     void executeStep(int stepIndex) override;
@@ -73,6 +81,8 @@ private:
 	QDateTime			     m_sessionStart;
 	QString 				 m_operatorName;
 	QTimer*				     m_backgroundPollTimer {nullptr};
+	LongRunMonitor*			 m_longRunMonitor      {nullptr};
+	bool 					 m_longRunActive	   {false};
 
     static constexpr const char* kSrc = "MsvDispatcher";
 

@@ -59,6 +59,9 @@ set(SOURCES
 
     # Шаг 6 — Отчёт
     src/report/ReportGenerator.cpp
+
+    src/core/LongRunMonitor.cpp
+    src/ui/LongRunSetupDialog.cpp
 )
 
 qt6_add_executable(MsvTester ${SOURCES})

@@ -18,6 +18,19 @@ MsvScenarioDispatcher::MsvScenarioDispatcher(
 	m_uartMonitor = new Serial::UartMonitor(logger, this);
 	m_reportGenerator = std::make_unique<Report::ReportGenerator>(logger);
 	m_sessionStart = QDateTime::currentDateTimeUtc();
+	m_longRunMonitor = new LongRunMonitor(
+			deviceModel, m_webClient, m_sntpClient, m_uartMonitor, logger, this);
+
+	connect(m_longRunMonitor, &LongRunMonitor::progressUpdate,
+			this, &MsvScenarioDispatcher::longRunProgressUpdate);
+	connect(m_longRunMonitor, &LongRunMonitor::finished,
+			this, [this](const LongRunResult& r){
+		m_longRunActive = false;
+		startBackgroundPolling();
+		emit longRunFinished(r);
+	});
+	connect(m_longRunMonitor, &LongRunMonitor::displayUpdate,
+			this, &MsvScenarioDispatcher::longRunDisplayUpdate);
 
 }
 
@@ -272,7 +285,8 @@ void MsvScenarioDispatcher::selectPort(const QString& portName, int baudRate)
 				if (r.utcTime.isValid())
 					stats->lastUtc = r.utcTime;
 
-				if (stats->total % 10 == 0) {  // каждые 10 предложений
+				// Прогресс в сводку только если не лонг ран и каждые 10 предложений
+				if (!m_longRunActive && stats->total % 10 == 0) {
 					emit stepProgressUpdate(m_currentIdx, QStringLiteral(
 							"Получено: %1  RMC: %2  GGA: %3  Ошибок: %4\nПоследнее UTC: %5")
 							.arg(stats->total)
@@ -280,20 +294,18 @@ void MsvScenarioDispatcher::selectPort(const QString& portName, int baudRate)
 							.arg(stats->ggaCount)
 							.arg(stats->total - stats->checksumOk)
 							.arg(stats->lastUtc.isValid()
-								 ? stats->lastUtc.toString("HH:mm:ss.zzz")
-								 : "—"));
+								 ? stats->lastUtc.toString("HH:mm:ss.zzz") : "—"));
 				}
 
 				if (r.isValid && r.utcTime.isValid())
 					m_deviceModel->applyGnssTime(r.utcTime);
 
-				// Сбрасываем таймер "нет данных"
 				if (m_uartNoDataTimer)
 					m_uartNoDataTimer->start(5000);
-
 			});
 
 	// Таймер "нет данных 5 секунд"
+	if (m_longRunActive) return;
 	m_uartNoDataTimer = new QTimer(this);
 	m_uartNoDataTimer->setSingleShot(true);
 	connect(m_uartNoDataTimer, &QTimer::timeout,
@@ -717,6 +729,25 @@ void MsvScenarioDispatcher::setOperatorName(const QString& name)
 			m_backgroundPollTimer = nullptr;
 			m_logger->info(kSrc, "Фоновый мониторинг остановлен");
 		}
+	}
+
+	void MsvScenarioDispatcher::startLongRun(int durationMinutes)
+	{
+		if (!m_deviceModel->isDeviceFound()) {
+			m_logger->error(kSrc, "Длительный тест: устройство не найдено");
+			return;
+		}
+		m_longRunActive = true;
+		stopBackgroundPolling();
+		const QHostAddress ip = m_deviceModel->currentSnapshot().ipAddress;
+		m_longRunMonitor->start(durationMinutes, ip);
+	}
+
+	void MsvScenarioDispatcher::stopLongRun()
+	{
+		m_longRunActive = false;
+		m_longRunMonitor->stop();
+		startBackgroundPolling();
 	}
 
 } // namespace Msv::Core

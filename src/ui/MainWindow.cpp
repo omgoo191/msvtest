@@ -6,7 +6,8 @@
 #include "core/IDeviceModel.h"
 #include "core/Logger.h"
 #include "network/WhoIAmTypes.h"
-
+#include "ui/SerialPortSelectionDialog.h"
+#include "ui/LongRunSetupDialog.h"
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QHostAddress>
@@ -24,6 +25,7 @@
 #include <QFont>
 #include <QFontDatabase>
 #include <QScrollBar>
+#include <QTimer>
 
 namespace Msv::Ui {
 
@@ -130,6 +132,14 @@ void MainWindow::applyTheme()
         }
 
         /* ── Кнопки ── */
+
+		QPushButton#longRunBtn {
+			background-color: transparent;
+			color: #505050;
+			border: 1px solid #2e2e2e;
+			font-size: 14pt;
+		}
+		QPushButton#longRunBtn:hover { color: #00e5cc; border-color: #00e5cc; }
 
 		QPushButton#restartFromBtn {
 			background-color: transparent;
@@ -525,6 +535,12 @@ void MainWindow::buildUi()
 			m_devModeBtn->setCheckable(true);
 			m_restartFromBtn->setEnabled(false);
 
+			m_longRunBtn = new QPushButton("⏱", mainWidget);
+			m_longRunBtn->setObjectName("longRunBtn");
+			m_longRunBtn->setFixedSize(40, 40);
+			m_longRunBtn->setToolTip("Длительный мониторинг");
+
+			btnRow->addWidget(m_longRunBtn);
 			btnRow->addWidget(m_restartFromBtn);
 			btnRow->addWidget(m_continueBtn);
 			btnRow->addWidget(m_startBtn);
@@ -658,6 +674,19 @@ void MainWindow::connectSignals()
 		m_devMode = checked;
 		qDebug() << (checked ? "DEV MODE включён" : "DEV MODE выключен");
 	});
+
+	connect(m_longRunBtn, &QPushButton::clicked, this, &MainWindow::onLongRunClicked);
+
+	if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher)) {
+		connect(msv, &Core::MsvScenarioDispatcher::longRunProgressUpdate,
+				this, [this](int el, int tot, const QString& stats) {
+					if (m_longRunDialog) m_longRunDialog->updateProgress(el, tot, stats);
+				});
+		connect(msv, &Core::MsvScenarioDispatcher::longRunFinished,
+				this, [this](const Core::LongRunResult& result) {
+					if (m_longRunDialog) m_longRunDialog->showResult(result);
+				});
+	}
 }
 
 // ── Слоты ─────────────────────────────────────────────────────────────────────
@@ -1015,7 +1044,10 @@ void MainWindow::onStepProgressUpdate(int stepIndex, const QString& details)
 	}
 	rebuildSummary();
 	// Переключить на сводку во время выполнения
-	m_rightTabs->setCurrentIndex(1);
+	if(m_viewingStepIndex == -1)
+	{
+		m_rightTabs->setCurrentIndex(1);
+	}
 }
 
 void MainWindow::rebuildSummary()
@@ -1081,6 +1113,48 @@ void MainWindow::rebuildSummary()
 	// Скроллить вниз к активному шагу
 	m_summaryView->verticalScrollBar()->setValue(
 			m_summaryView->verticalScrollBar()->maximum());
+}
+
+void MainWindow::onLongRunClicked()
+{
+	if (!m_longRunDialog) {
+		m_longRunDialog = new LongRunSetupDialog(this);
+
+		auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher);
+
+		connect(m_longRunDialog, &LongRunSetupDialog::startRequested,
+				this, [this, msv](int minutes) {
+					SerialPortSelectionDialog portDlg(this);
+					if (portDlg.exec() != QDialog::Accepted) return;
+
+					msv->setLongRunActive(true);
+					msv->selectPort(portDlg.selectedPort(), portDlg.selectedBaud());
+					QTimer::singleShot(200, this, [msv, minutes]() {
+						msv->startLongRun(minutes);
+					});
+				});
+
+		connect(m_longRunDialog, &LongRunSetupDialog::stopRequested,
+				this, [msv]() { msv->stopLongRun(); });
+
+		if (msv) {
+			connect(msv, &Core::MsvScenarioDispatcher::longRunProgressUpdate,
+					this, [this](int el, int tot, const QString& stats) {
+						if (m_longRunDialog) m_longRunDialog->updateProgress(el, tot, stats);
+					});
+			connect(msv, &Core::MsvScenarioDispatcher::longRunDisplayUpdate,
+						   this, [this](const QString& stats) {
+				if (m_longRunDialog) m_longRunDialog->updateStats(stats);
+			});
+			connect(msv, &Core::MsvScenarioDispatcher::longRunFinished,
+					this, [this](const Core::LongRunResult& result) {
+						if (m_longRunDialog) m_longRunDialog->showResult(result);
+					});
+		}
+	}
+
+	m_longRunDialog->show();
+	m_longRunDialog->raise();
 }
 
 } // namespace Msv::Ui

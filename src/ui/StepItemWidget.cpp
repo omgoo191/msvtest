@@ -2,6 +2,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QLabel>
+#include <QPalette>
 
 namespace Msv::Ui {
 
@@ -78,15 +79,19 @@ void StepItemWidget::refresh()
             "  border-top: none; border-right: none; border-bottom: none;"
             "}"
         );
-    } else {
-        setStyleSheet(
-            "StepItemWidget {"
-            "  background-color: transparent;"
-            "  border-left: 3px solid transparent;"
-            "  border-top: none; border-right: none; border-bottom: none;"
-            "}"
-        );
-    }
+	} else {
+		setStyleSheet(
+				"StepItemWidget {"
+				+ QString(m_hovered
+						  ? "  background-color: #1a1a1a;"
+							"  border-left: 3px solid #2a2a2a;"
+						  : "  background-color: transparent;"
+							"  border-left: 3px solid transparent;")
+				+
+				"  border-top: none; border-right: none; border-bottom: none;"
+				"}"
+		);
+	}
 
     // ── Кружок ────────────────────────────────────────────────────────────────
     struct CircleStyle { QString bg; QString fg; QString text; };
@@ -163,25 +168,26 @@ void StepItemWidget::mousePressEvent(QMouseEvent *event)
 	emit clicked(m_index);
 }
 
-void StepItemWidget::enterEvent(QEnterEvent* event)
-{
-	QFrame::enterEvent(event);
-	if (!m_active)
-		setStyleSheet(
-				"StepItemWidget {"
-				"  background-color: #1a1a1a;"
-				"  border-left: 3px solid #303030;"
-				"  border-top: none; border-right: none; border-bottom: none;"
-				"}"
-		);
-	setCursor(Qt::PointingHandCursor);
-}
+	void StepItemWidget::enterEvent(QEnterEvent* event)
+	{
+		QFrame::enterEvent(event);
+		m_hovered = true;
+		if (!m_active) {
+			setAutoFillBackground(true);
+			QPalette pal = palette();
+			pal.setColor(QPalette::Window, QColor("#1a1a1a"));
+			setPalette(pal);
+		}
+	}
 
-void StepItemWidget::leaveEvent(QEvent* event)
-{
-	QFrame::leaveEvent(event);
-	refresh();
-	setCursor(Qt::ArrowCursor);
-}
+	void StepItemWidget::leaveEvent(QEvent* event)
+	{
+		QFrame::leaveEvent(event);
+		m_hovered = false;
+		if (!m_active) {
+			setAutoFillBackground(false);
+			setPalette(QPalette());
+		}
+	}
 
 } // namespace Msv::Ui

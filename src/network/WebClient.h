@@ -57,6 +57,7 @@ public:
                  int                 timeoutMs = 5000);
 
     void cancel();
+	void setQuiet(bool quiet) { m_quiet = quiet; }
 
 signals:
     void finished  (const Msv::Network::WebClient::Result& result);
@@ -72,11 +73,15 @@ private slots:
     void onReplyFinished();
     void onTimeout();
 
+
+
+
 private:
     QNetworkAccessManager*          m_nam     {nullptr};
     QNetworkReply*                  m_reply   {nullptr};
     QTimer*                         m_timer   {nullptr};
     std::shared_ptr<Core::ILogger>  m_logger;
+	bool 							m_quiet {false};
 
     static constexpr const char* kSrc = "WebClient";
 };

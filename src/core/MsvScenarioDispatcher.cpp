@@ -714,6 +714,7 @@ void MsvScenarioDispatcher::setOperatorName(const QString& name)
 						bgClient->deleteLater();
 					}, Qt::QueuedConnection);
 
+			bgClient->setQuiet(true);
 			bgClient->request(ip, "/tags.shtml");
 		});
 

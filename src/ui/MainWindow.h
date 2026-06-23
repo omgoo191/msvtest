@@ -3,10 +3,12 @@
 #include <QMainWindow>
 #include <QList>
 #include <memory>
+#include <QDateTime>
 #include "network/WhoIAmTypes.h"
 #include "ui/SerialPortSelectionDialog.h"
 #include "core/IScenarioDispatcher.h"
 #include "ui/LongRunSetupDialog.h"
+#include "ui/StepSummaryCard.h"
 
 namespace Msv::Core {
     class IScenarioDispatcher;
@@ -70,6 +72,7 @@ private:
     void setStatusIndicator(const QString& text, const QString& color);
     void setPrompt(const QString& header, const QString& body, const QString& accentColor);
 	void rebuildSummary();
+	void filterLogByTime(const QDateTime& from, const QDateTime& to);
 
     // ── Top bar ───────────────────────────────────────────────────────────────
     QLabel*       m_deviceLabel   {nullptr};
@@ -118,7 +121,6 @@ private:
 	QLabel* m_antennaIndicator {nullptr};
 
 	QTabWidget* m_rightTabs    {nullptr};
-	QTextEdit*  m_summaryView {nullptr};
 
 	struct StepSummaryRecord {
 		int			 	 index;
@@ -126,6 +128,8 @@ private:
 		Core::StepResult result {Core::StepResult::NotRun};
 		QString 		 details;
 		QString			 liveDetails;
+		QDateTime        startedAt;
+		QDateTime  		 finishedAt;
 	};
 
 	QList<StepSummaryRecord> m_summaryRecords;
@@ -135,6 +139,9 @@ private:
 
 	QPushButton*             m_longRunBtn {nullptr};
 	LongRunSetupDialog* 		 m_longRunDialog {nullptr};
+
+	QList<StepSummaryCard*>	 m_summaryCards;
+	QWidget*				 m_summaryContainer {nullptr};
 };
 
 } // namespace Msv::Ui

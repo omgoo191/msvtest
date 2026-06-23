@@ -62,6 +62,8 @@ set(SOURCES
 
     src/core/LongRunMonitor.cpp
     src/ui/LongRunSetupDialog.cpp
+
+    src/ui/StepSummaryCard.cpp
 )
 
 qt6_add_executable(MsvTester ${SOURCES})

@@ -555,17 +555,22 @@ void MainWindow::buildUi()
 		auto* summaryWidget = new QWidget(m_rightTabs);
 		auto* summaryLayout = new QVBoxLayout(summaryWidget);
 		summaryLayout->setContentsMargins(0, 0, 0, 0);
+		summaryLayout->setSpacing(0);
 
-		m_summaryView = new QTextEdit(summaryWidget);
-		m_summaryView->setObjectName("summaryView");
-		m_summaryView->setReadOnly(true);
-		m_summaryView->setStyleSheet(
-				"QTextEdit#summaryView {"
-				"  background-color: #0e0e0e; border: none;"
-				"  color: #c0c0c0; padding: 12px;"
-				"}"
-		);
-		summaryLayout->addWidget(m_summaryView);
+		auto* summaryScroll = new QScrollArea(summaryWidget);
+		summaryScroll->setWidgetResizable(true);
+		summaryScroll->setFrameShape(QFrame::NoFrame);
+		summaryScroll->setStyleSheet("QScrollArea { background: #0e0e0e; border: none; }");
+
+		m_summaryContainer = new QWidget(summaryScroll);
+		m_summaryContainer->setStyleSheet("background: #0e0e0e;");
+		auto* containerLayout = new QVBoxLayout(m_summaryContainer);
+		containerLayout->setContentsMargins(0, 0, 0, 0);
+		containerLayout->setSpacing(0);
+		containerLayout->addStretch(1);
+
+		summaryScroll->setWidget(m_summaryContainer);
+		summaryLayout->addWidget(summaryScroll);
 
 		m_rightTabs->addTab(mainWidget,    "  ИНСТРУКЦИЯ  ");
 		m_rightTabs->addTab(summaryWidget, "  СВОДКА  ");
@@ -739,6 +744,7 @@ void MainWindow::onStepStarted(int idx, const Core::StepDescriptor& desc)
         m_stepItems[idx]->setActive(true);
     }
 
+
     // Обновить заголовок
     m_stepIndexLabel->setText(QStringLiteral("%1").arg(idx + 1, 2, 10, QChar('0')));
     m_stepTitleLabel->setText(desc.title);
@@ -773,6 +779,7 @@ void MainWindow::onStepStarted(int idx, const Core::StepDescriptor& desc)
 	sumRec.index  = idx;
 	sumRec.title  = desc.title;
 	sumRec.result = Core::StepResult::NotRun;
+	sumRec.startedAt = QDateTime::currentDateTimeUtc();
 	if (idx < m_summaryRecords.size())
 		m_summaryRecords[idx] = sumRec;
 	else
@@ -795,6 +802,7 @@ void MainWindow::onStepFinished(int idx, Core::StepResult result, const QString&
 	if (idx < m_summaryRecords.size()) {
 		m_summaryRecords[idx].result  = result;
 		m_summaryRecords[idx].details = details;
+		m_summaryRecords[idx].finishedAt = QDateTime::currentDateTimeUtc();
 		m_summaryRecords[idx].liveDetails.clear();
 	}
 	rebuildSummary();
@@ -1052,69 +1060,40 @@ void MainWindow::onStepProgressUpdate(int stepIndex, const QString& details)
 
 void MainWindow::rebuildSummary()
 {
-	QString html;
-	html += "<html><body style='background:#0e0e0e; color:#c0c0c0;"
-			" font-family:Segoe UI,Arial; font-size:10pt; margin:0; padding:0;'>";
+	// Создаём карточки по мере появления записей
+	while (m_summaryCards.size() < m_summaryRecords.size()) {
+		const auto& rec = m_summaryRecords[m_summaryCards.size()];
+		auto* card = new StepSummaryCard(rec.index, rec.title, m_summaryContainer);
 
-	for (const auto& rec : m_summaryRecords) {
-		// Иконка и цвет
-		QString icon, color;
-		switch (rec.result) {
-			case Core::StepResult::Pass:
-				icon = "✔"; color = "#4caf50"; break;
-			case Core::StepResult::Fail:
-				icon = "✖"; color = "#f44336"; break;
-			case Core::StepResult::Warning:
-				icon = "⚠"; color = "#ff9800"; break;
-			default:
-				icon = "●"; color = "#00e5cc"; break;
-		}
+		connect(card, &StepSummaryCard::showInLogRequested,
+				this, [this](QDateTime from, QDateTime to) {
+					// Фильтрация журнала — переключаем на нижнюю панель
+					// и фильтруем по времени
+					filterLogByTime(from, to);
+				});
 
-		const bool isRunning = rec.result == Core::StepResult::NotRun
-							   && !rec.liveDetails.isEmpty();
-
-		html += QStringLiteral(
-				"<div style='padding:10px 16px; border-bottom:1px solid #1a1a1a;'>"
-				"<span style='color:%1; font-size:14pt;'>%2</span>"
-				"&nbsp;&nbsp;"
-				"<span style='color:#e0e0e0; font-weight:bold;'>%3. %4</span>")
-				.arg(color, icon)
-				.arg(rec.index + 1)
-				.arg(rec.title.toHtmlEscaped());
-
-		// Детали результата
-		if (!rec.details.isEmpty()) {
-			html += QStringLiteral(
-					"<div style='color:#707070; font-size:9pt;"
-					" margin-top:4px; margin-left:28px;'>%1</div>")
-					.arg(rec.details.toHtmlEscaped());
-		}
-
-		// Живые данные
-		if (isRunning && !rec.liveDetails.isEmpty()) {
-			const QString liveHtml = rec.liveDetails
-										.toHtmlEscaped()
-										.replace(QLatin1String("\n"), QLatin1String("<br>"));
-			html += QStringLiteral(
-					"<div style='color:#00e5cc; font-size:9pt;"
-					" font-family:Consolas,monospace;"
-					" margin-top:6px; margin-left:28px;"
-					" padding:6px; background:#0a1a1a;"
-					" border-left:2px solid #00e5cc;'>%1</div>")
-					.arg(liveHtml);
-		}
-
-		html += "</div>";
+		// Вставить перед stretch
+		auto* layout = qobject_cast<QVBoxLayout*>(m_summaryContainer->layout());
+		layout->insertWidget(layout->count() - 1, card);
+		m_summaryCards.append(card);
 	}
 
-	html += "</body></html>";
-	m_summaryView->setHtml(html);
+	// Обновляем существующие карточки
+	for (int i = 0; i < m_summaryRecords.size(); ++i) {
+		const auto& rec  = m_summaryRecords[i];
+		auto*       card = m_summaryCards[i];
 
-	// Скроллить вниз к активному шагу
-	m_summaryView->verticalScrollBar()->setValue(
-			m_summaryView->verticalScrollBar()->maximum());
+		card->setStartTime(rec.startedAt);
+
+		if (!rec.finishedAt.isNull())
+			card->setFinishTime(rec.finishedAt);
+
+		if (rec.result != Core::StepResult::NotRun)
+			card->setResult(rec.result, rec.details);
+		else if (!rec.liveDetails.isEmpty())
+			card->setRunning(rec.liveDetails);
+	}
 }
-
 void MainWindow::onLongRunClicked()
 {
 	if (!m_longRunDialog) {
@@ -1155,6 +1134,13 @@ void MainWindow::onLongRunClicked()
 
 	m_longRunDialog->show();
 	m_longRunDialog->raise();
+}
+
+void MainWindow::filterLogByTime(const QDateTime& from, const QDateTime& to)
+{
+	Q_UNUSED(from)
+	Q_UNUSED(to)
+	// TODO:  фильтрация журнала по времени
 }
 
 } // namespace Msv::Ui

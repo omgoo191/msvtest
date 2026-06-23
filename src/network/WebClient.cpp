@@ -26,7 +26,8 @@ void WebClient::request(const QHostAddress& ip, const QString& path, int timeout
     cancel();
 
     const QUrl url(QStringLiteral("http://%1%2").arg(ip.toString(), path));
-    m_logger->info(kSrc, QStringLiteral("GET %1").arg(url.toString()));
+	if(!m_quiet)
+    	m_logger->info(kSrc, QStringLiteral("GET %1").arg(url.toString()));
 
     QNetworkRequest req(url);
     req.setTransferTimeout(timeoutMs);
@@ -75,11 +76,11 @@ void WebClient::onReplyFinished()
     // ── Тело ответа → парсинг статуса ─────────────────────────────────────────
     const QByteArray body = reply->readAll();
     parseBody(body, result);
-
-    m_logger->info(kSrc, QStringLiteral("Web-статус: source=%1 status=%2 time=%3")
-        .arg(static_cast<int>(result.syncSource))
-        .arg(static_cast<int>(result.syncStatus))
-        .arg(result.webTime.toString(Qt::ISODate)));
+	if(!m_quiet)
+    	m_logger->info(kSrc, QStringLiteral("Web-статус: source=%1 status=%2 time=%3")
+        	.arg(static_cast<int>(result.syncSource))
+        	.arg(static_cast<int>(result.syncStatus))
+        	.arg(result.webTime.toString(Qt::ISODate)));
 
     emit finished(result);
 }

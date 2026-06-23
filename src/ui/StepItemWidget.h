@@ -36,6 +36,8 @@ private:
     QLabel* m_type   {nullptr};
     QLabel* m_badge  {nullptr};
 
+
+	bool 			 m_hovered {false};
     int              m_index;
     bool             m_active {false};
     Core::StepResult m_result {Core::StepResult::NotRun};

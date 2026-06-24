@@ -597,6 +597,25 @@ void MainWindow::buildUi()
         lhl->setContentsMargins(16, 0, 16, 0);
 
         auto* logLabel = new QLabel("ЖУРНАЛ СОБЫТИЙ", logHeader);
+		auto* clearFilterBtn = new QPushButton("× сброс", logHeader);
+		m_clearFilterBtn = clearFilterBtn;
+		clearFilterBtn->setObjectName("clearFilterBtn");
+		clearFilterBtn->setStyleSheet(
+				"QPushButton { background: transparent; color: #404040;"
+				" border: none; font-size: 8pt; }"
+				"QPushButton:hover { color: #909090; }");
+		clearFilterBtn->hide();
+		lhl->addWidget(clearFilterBtn);
+
+		connect(clearFilterBtn, &QPushButton::clicked, this, [this, clearFilterBtn]() {
+			m_logView->clear();
+			if (m_logModel) {
+				const auto all = m_logModel->entries();
+				for (const auto& e : all)
+					onLogEntryAdded(e);
+			}
+			clearFilterBtn->hide();
+		});
         logLabel->setObjectName("sectionLabel");
         lhl->addWidget(logLabel);
         lhl->addStretch();
@@ -692,7 +711,12 @@ void MainWindow::connectSignals()
 					if (m_longRunDialog) m_longRunDialog->showResult(result);
 				});
 	}
-}
+
+	connect(m_dispatcher, &Core::IScenarioDispatcher::currentStepChanged,
+			this, [this](int idx) {
+		if(m_logModel) m_logModel->setCurrentStep(idx);
+		}, Qt::DirectConnection);
+	}
 
 // ── Слоты ─────────────────────────────────────────────────────────────────────
 
@@ -738,12 +762,14 @@ void MainWindow::onStateChanged(Core::DispatcherState newState)
 
 void MainWindow::onStepStarted(int idx, const Core::StepDescriptor& desc)
 {
+	qDebug() << "mainwiwindow m logmodel" << static_cast<void*>(m_logModel);
     // Обновить левую панель
     if (idx < m_stepItems.size()) {
         if (idx > 0) m_stepItems[idx - 1]->setActive(false);
         m_stepItems[idx]->setActive(true);
     }
 
+	if (m_logModel) m_logModel->setCurrentStep(idx);
 
     // Обновить заголовок
     m_stepIndexLabel->setText(QStringLiteral("%1").arg(idx + 1, 2, 10, QChar('0')));
@@ -793,17 +819,88 @@ void MainWindow::onStepFinished(int idx, Core::StepResult result, const QString&
 	{
 		m_stepItems[idx]->setResult(result);
 	}
+	if(m_logModel) m_logModel->setCurrentStep(-1);
 	// Обновить сохранённую запись — добавить детали результата
 	if (idx < m_stepRecords.size() && !details.isEmpty()) {
 		m_stepRecords[idx].promptBody +=
 				QStringLiteral("\n\n▸ %1").arg(details);
 	}
 
-	if (idx < m_summaryRecords.size()) {
-		m_summaryRecords[idx].result  = result;
-		m_summaryRecords[idx].details = details;
-		m_summaryRecords[idx].finishedAt = QDateTime::currentDateTimeUtc();
-		m_summaryRecords[idx].liveDetails.clear();
+	if (idx < m_summaryCards.size()) {
+
+		if (idx < m_summaryRecords.size())
+		{
+			m_summaryRecords[idx].result = result;
+			m_summaryRecords[idx].details = details;
+			m_summaryRecords[idx].finishedAt = QDateTime::currentDateTimeUtc();
+			m_summaryRecords[idx].liveDetails.clear();
+		}
+
+		m_summaryCards[idx]->setFinishTime(m_summaryRecords[idx].finishedAt);
+
+		const auto snap = m_dispatcher
+						  ? qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher)
+							? m_deviceModel->currentSnapshot()
+							: Core::DeviceSnapshot{}
+						  : Core::DeviceSnapshot{};
+
+		QString params;
+		switch (idx) {
+			case 0:  // WhoIAm
+				params = QStringLiteral(
+						"Устройство: %1\nIP: %2   Версия ПО: %3")
+						.arg(snap.deviceName.isEmpty() ? "—" : snap.deviceName)
+						.arg(snap.ipAddress.toString())
+						.arg(snap.firmwareVersion);
+				break;
+			case 1:  // Web-статус
+				params = QStringLiteral(
+						"Антенна: %1\nGPS: %2\nВремя устройства: %3\nИсточник: %4")
+						.arg(snap.antennaStatus.isEmpty() ? "—" : snap.antennaStatus)
+						.arg(snap.gpsStatus.isEmpty() ? "—" : snap.gpsStatus)
+						.arg(snap.webTime.value_or(QDateTime{}).isValid()
+							 ? snap.webTime.value_or(QDateTime{}).toLocalTime().toString("HH:mm:ss")
+							 : "—")
+						.arg(snap.syncSource == Core::SyncSource::GNSS ? "GNSS (PPS)" :
+							 snap.syncSource == Core::SyncSource::NTP  ? "NTP" : "Внутренний");
+				break;
+			case 2:  // SNTP
+				params = QStringLiteral(
+						"Время: %1\nStratum: %2   LI: %3\nRTT: %4 мс")
+						.arg(snap.sntpTime.value_or(QDateTime{}).isValid()
+							 ? snap.sntpTime.value_or(QDateTime{}).toLocalTime().toString("HH:mm:ss.zzz")
+							 : "—")
+						.arg(snap.stratumLevel)
+						.arg(snap.leapIndicator)
+						.arg(details.contains("RTT=")
+							 ? details.split("RTT=").last().split(" ").first()
+							 : "—");
+				break;
+			case 4:  // UART NMEA
+				params = details;  // уже содержит RMC/GGA/checksum статистику
+				break;
+			case 6:  // КЗ мониторинг
+				params = QStringLiteral(
+						"Антенна при КЗ: %1\nСтатус sync: %2")
+						.arg(snap.antennaStatus)
+						.arg(snap.syncStatus == Core::SyncStatus::Synchronized ? "Synchronized" :
+							 snap.syncStatus == Core::SyncStatus::Holdover     ? "Holdover"     :
+							 snap.syncStatus == Core::SyncStatus::Freerun      ? "Freerun"      : "—");
+				break;
+			case 8:  // Восстановление
+				params = QStringLiteral(
+						"GPS: %1\nАнтенна: %2")
+						.arg(snap.gpsStatus.isEmpty() ? "—" : snap.gpsStatus)
+						.arg(snap.antennaStatus.isEmpty() ? "—" : snap.antennaStatus);
+				break;
+			default:
+				params = details;
+				break;
+		}
+
+		m_summaryCards[idx]->setKeyParams(params);
+		m_summaryCards[idx]->setResult(result, QString{});
+		m_summaryCards[idx]->setExpanded(false);
 	}
 	rebuildSummary();
 }
@@ -1066,11 +1163,7 @@ void MainWindow::rebuildSummary()
 		auto* card = new StepSummaryCard(rec.index, rec.title, m_summaryContainer);
 
 		connect(card, &StepSummaryCard::showInLogRequested,
-				this, [this](QDateTime from, QDateTime to) {
-					// Фильтрация журнала — переключаем на нижнюю панель
-					// и фильтруем по времени
-					filterLogByTime(from, to);
-				});
+				this, &MainWindow::filterLogByStep);
 
 		// Вставить перед stretch
 		auto* layout = qobject_cast<QVBoxLayout*>(m_summaryContainer->layout());
@@ -1089,9 +1182,16 @@ void MainWindow::rebuildSummary()
 			card->setFinishTime(rec.finishedAt);
 
 		if (rec.result != Core::StepResult::NotRun)
+		{
 			card->setResult(rec.result, rec.details);
+			card->setExpanded(false);
+		}
 		else if (!rec.liveDetails.isEmpty())
+		{
 			card->setRunning(rec.liveDetails);
+			card->setExpanded(true);
+
+		}
 	}
 }
 void MainWindow::onLongRunClicked()
@@ -1136,11 +1236,19 @@ void MainWindow::onLongRunClicked()
 	m_longRunDialog->raise();
 }
 
-void MainWindow::filterLogByTime(const QDateTime& from, const QDateTime& to)
+void MainWindow::filterLogByStep(int stepIndex)
 {
-	Q_UNUSED(from)
-	Q_UNUSED(to)
-	// TODO:  фильтрация журнала по времени
+	if (!m_logModel) return;
+
+	const auto entries = m_logModel->entriesForStep(stepIndex);
+	m_logView->clear();
+	for (const auto& e : entries) {
+		onLogEntryAdded(e);
+	}
+	m_logView->verticalScrollBar()->setValue(0);
+
+	if(m_clearFilterBtn) m_clearFilterBtn->show();
+
 }
 
 } // namespace Msv::Ui

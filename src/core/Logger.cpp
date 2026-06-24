@@ -90,13 +90,17 @@ ModelLogBackend::ModelLogBackend(QObject* parent)
 
 void ModelLogBackend::log(const LogEntry& entry)
 {
+	qDebug() << "log backend this" << static_cast<void*>(this);
+
+	LogEntry e = entry;
+	e.stepIndex = m_currentStep;
     {
         QMutexLocker lock(&m_mutex);
-        m_entries.append(entry);
+        m_entries.append(e);
     }
     // Эмит в GUI-поток
-    QMetaObject::invokeMethod(this, [this, entry]() {
-        emit entryAdded(entry);
+    QMetaObject::invokeMethod(this, [this, e]() {
+        emit entryAdded(e);
     }, Qt::QueuedConnection);
 }
 
@@ -110,6 +114,24 @@ void ModelLogBackend::clear()
 {
     QMutexLocker lock(&m_mutex);
     m_entries.clear();
+}
+
+QList<LogEntry> ModelLogBackend::entriesForStep(int idx) const
+{
+	QMutexLocker lock(&m_mutex);
+	QList<LogEntry> result;
+	qDebug() << "looking for step" << idx << "total:" << m_entries.size();
+	int matched = 0;
+	for (const auto& e : m_entries)
+	{
+		if(e.stepIndex == idx)
+		{
+			matched++;
+			qDebug() << "matched" << matched;
+			result.append(e);
+		}
+	}
+	return result;
 }
 
 } // namespace Msv::Core

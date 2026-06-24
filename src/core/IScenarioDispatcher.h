@@ -116,6 +116,8 @@ signals:
 
 	/// Живые данные во время выполнения шага для сводки
 	void stepProgressUpdate(int stepIndex,const QString& details);
+
+	void currentStepChanged(int index);
 };
 
 } // namespace Msv::Core

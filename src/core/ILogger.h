@@ -25,6 +25,19 @@ struct LogEntry {
     LogLevel  level;
     QString   source;      ///< Имя подсистемы ("ScenarioDispatcher", "SntpClient", …)
     QString   message;
+	int 	  stepIndex {-1};
+
+	[[nodiscard]] QString levelStr() const
+	{
+		switch (level) {
+			case LogLevel::Debug:   return "DBG";
+			case LogLevel::Info:    return "INF";
+			case LogLevel::Warning: return "WRN";
+			case LogLevel::Error:   return "ERR";
+			case LogLevel::Fatal:   return "FTL";
+			default:                return "???";
+		}
+	}
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

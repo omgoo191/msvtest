@@ -111,9 +111,10 @@ void ScenarioDispatcher::advanceToStep(int index)
     }
 
     m_currentIdx = index;
-    const auto& step = m_steps[index];
+	const auto& step = m_steps[index];
 
-    m_logger->info(kSource, QStringLiteral("→ Шаг %1: %2").arg(index).arg(step.title));
+	emit currentStepChanged(index);
+	m_logger->info(kSource, QStringLiteral("→ Шаг %1: %2").arg(index).arg(step.title));
     emit stepStarted(index, step);
     emitProgress();
 

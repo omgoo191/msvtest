@@ -72,7 +72,7 @@ private:
     void setStatusIndicator(const QString& text, const QString& color);
     void setPrompt(const QString& header, const QString& body, const QString& accentColor);
 	void rebuildSummary();
-	void filterLogByTime(const QDateTime& from, const QDateTime& to);
+	void filterLogByStep(int stepIndex);
 
     // ── Top bar ───────────────────────────────────────────────────────────────
     QLabel*       m_deviceLabel   {nullptr};
@@ -98,11 +98,13 @@ private:
 
     // ── Log panel (bottom) ────────────────────────────────────────────────────
     QTextEdit*    m_logView       {nullptr};
+	QPushButton*  m_clearFilterBtn {nullptr};
 
     // ── Dependencies ─────────────────────────────────────────────────────────
     Core::IScenarioDispatcher* m_dispatcher  {nullptr};
     Core::IDeviceModel*        m_deviceModel {nullptr};
     Core::ModelLogBackend*     m_logModel    {nullptr};
+	Core::ModelLogBackend*     m_logBackend   {nullptr};
 
 	QPushButton* m_continueBtn {nullptr};
 
@@ -142,6 +144,7 @@ private:
 
 	QList<StepSummaryCard*>	 m_summaryCards;
 	QWidget*				 m_summaryContainer {nullptr};
+
 };
 
 } // namespace Msv::Ui

@@ -158,10 +158,9 @@ void StepSummaryCard::buildUi()
 
     connect(m_toggleBtn, &QPushButton::clicked,
             this, &StepSummaryCard::onToggleClicked);
-    connect(m_logBtn, &QPushButton::clicked,
-            this, [this]() {
-        emit showInLogRequested(m_startedAt, m_finishedAt);
-    });
+	connect(m_logBtn, &QPushButton::clicked, this, [this]() {
+		emit showInLogRequested(m_index);
+	});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

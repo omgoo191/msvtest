@@ -64,6 +64,8 @@ public:
 
     [[nodiscard]] QList<LogEntry> entries() const;
     void clear();
+	[[nodiscard]] QList<LogEntry> entriesForStep(int idx) const;
+	void setCurrentStep(int idx) {qDebug() <<"setCurrentStep called" << idx; m_currentStep = idx;}
 
 signals:
     void entryAdded(const Msv::Core::LogEntry& entry);
@@ -71,6 +73,7 @@ signals:
 private:
     mutable QMutex      m_mutex;
     QList<LogEntry>     m_entries;
+	int 				m_currentStep {-1};
 };
 
 } // namespace Msv::Core

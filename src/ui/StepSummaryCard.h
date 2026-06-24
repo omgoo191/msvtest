@@ -26,6 +26,7 @@ public:
     void setRunning (const QString& liveDetails);
     void setStartTime(const QDateTime& startedAt);
     void setFinishTime(const QDateTime& finishedAt);
+	void setExpanded(bool expanded);
 
     /// Обновить ключевые параметры (человекочитаемо)
     void setKeyParams(const QString& params);
@@ -35,7 +36,7 @@ public:
 
 signals:
     /// Оператор хочет увидеть журнал этого шага
-    void showInLogRequested(QDateTime from, QDateTime to);
+    void showInLogRequested(int stepIndex);
 
 private slots:
     void onToggleClicked();
@@ -44,7 +45,6 @@ private:
     void buildUi();
     void applyTheme();
     void updateHeader();
-    void setExpanded(bool expanded);
 
     int              m_index;
     QString          m_title;

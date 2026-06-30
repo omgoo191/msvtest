@@ -120,14 +120,11 @@ QList<LogEntry> ModelLogBackend::entriesForStep(int idx) const
 {
 	QMutexLocker lock(&m_mutex);
 	QList<LogEntry> result;
-	qDebug() << "looking for step" << idx << "total:" << m_entries.size();
-	int matched = 0;
 	for (const auto& e : m_entries)
 	{
 		if(e.stepIndex == idx)
 		{
-			matched++;
-			qDebug() << "matched" << matched;
+
 			result.append(e);
 		}
 	}

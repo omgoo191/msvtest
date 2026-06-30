@@ -218,19 +218,9 @@ void LongRunSetupDialog::switchToFinished()
 void LongRunSetupDialog::updateProgress(int elapsedSec, int totalSec,
                                          const QString& stats)
 {
+	Q_UNUSED(elapsedSec)
+	Q_UNUSED(totalSec)
     if (m_phase != Phase::Running) return;
-
-    const int pct = totalSec > 0 ? (elapsedSec * 100 / totalSec) : 0;
-    m_progressBar->setValue(pct);
-
-    const auto fmt = [](int sec) -> QString {
-        return QStringLiteral("%1:%2")
-            .arg(sec / 60, 2, 10, QChar('0'))
-            .arg(sec % 60, 2, 10, QChar('0'));
-    };
-    m_timeLabel->setText(QStringLiteral("%1 / %2")
-        .arg(fmt(elapsedSec), fmt(totalSec)));
-
     m_statsView->setPlainText(stats);
 }
 
@@ -332,6 +322,22 @@ void LongRunSetupDialog::updateStats(const QString &stats)
 {
 	if(m_phase != Phase::Running) return;
 	m_statsView->setPlainText(stats);
+}
+
+void LongRunSetupDialog::updateTimer(int elapsedSec, int totalSec)
+{
+	qDebug() << "UpdateTImer" << elapsedSec <<"phase" << (int)m_phase;
+	if (m_phase != Phase::Running) return;
+	const int pct = totalSec > 0 ? (elapsedSec * 100 / totalSec) : 0;
+	m_progressBar->setValue(pct);
+
+	const auto fmt = [](int sec)->QString{
+		return QStringLiteral("%1:%2")
+		.arg(sec /60, 2, 10, QChar('0'))
+		.arg(sec %60, 2, 10, QChar('0'));
+	};
+	m_timeLabel->setText(QStringLiteral("%1 / %2")
+		.arg(fmt(elapsedSec) , fmt(totalSec)));
 }
 
 } // namespace Msv::Ui

@@ -31,6 +31,7 @@ public:
     void updateProgress(int elapsedSec, int totalSec, const QString& stats);
     void showResult(const Core::LongRunResult& result);
 	void updateStats(const QString& stats);
+	void updateTimer(int elapsedSec, int totalSec);
 
 signals:
     void startRequested(int durationMinutes);

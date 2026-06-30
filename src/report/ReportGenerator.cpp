@@ -1,8 +1,10 @@
 #include "ReportGenerator.h"
 
-#include <QFile>
-#include <QTextStream>
-#include <QList>
+#include <QTextDocument>
+#include <QPrinter>
+#include <QPageLayout>
+#include <QPageSize>
+#include <QFileInfo>
 
 namespace Msv::Report {
 
@@ -10,284 +12,293 @@ ReportGenerator::ReportGenerator(std::shared_ptr<Core::ILogger> logger)
     : m_logger(std::move(logger))
 {}
 
-bool ReportGenerator::generate(const SessionData&               session,
-                                const Core::DeviceSnapshot&      snapshot,
-                                const Core::IScenarioDispatcher* dispatcher,
-                                const QString&                   filePath)
+bool ReportGenerator::generatePdf(const SessionData&               session,
+                                   const Core::DeviceSnapshot&      snapshot,
+                                   const Core::IScenarioDispatcher* dispatcher,
+                                   const Core::LongRunResult*       longRun,
+                                   const QString&                   filePath)
 {
-    QFile file(filePath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        m_logger->error(kSrc, QStringLiteral("Не удалось открыть файл: %1").arg(filePath));
+    const QString html = buildHtml(session, snapshot, dispatcher, longRun);
+
+    QTextDocument doc;
+	doc.setDefaultFont(QFont("Segoe UI", 11));
+    doc.setHtml(html);
+
+    QPrinter printer(QPrinter::HighResolution);
+    printer.setOutputFormat(QPrinter::PdfFormat);
+    printer.setOutputFileName(filePath);
+    printer.setPageSize(QPageSize(QPageSize::A4));
+    printer.setPageMargins(QMarginsF(15, 15, 15, 15), QPageLayout::Millimeter);
+
+    doc.setPageSize(printer.pageRect(QPrinter::DevicePixel).size());
+	doc.setTextWidth(printer.pageRect(QPrinter::DevicePixel).width());
+    doc.print(&printer);
+
+    QFileInfo fi(filePath);
+    if (!fi.exists() || fi.size() == 0) {
+        m_logger->error(kSrc, QStringLiteral("PDF не создан: %1").arg(filePath));
         return false;
     }
 
-    QTextStream out(&file);
-    out.setEncoding(QStringConverter::Utf8);
-
-    const QString line80(80, '=');
-    const QString line80d(80, '-');
-
-    out << line80 << "\n";
-    out << "    ПРОТОКОЛ ПРОВЕРКИ МОДУЛЯ СИНХРОНИЗАЦИИ ВРЕМЕНИ (МСВ)\n";
-    out << line80 << "\n\n";
-
-    out << buildHeader(session, snapshot);
-    out << "\n" << line80d << "\n\n";
-
-    out << buildStepsTable(dispatcher);
-    out << "\n" << line80d << "\n\n";
-
-    out << buildTimeAnalysis(snapshot);
-    out << "\n" << line80d << "\n\n";
-
-    out << buildVerdict(dispatcher);
-    out << "\n" << line80 << "\n";
-
-    file.close();
-    m_logger->info(kSrc, QStringLiteral("Отчёт сохранён: %1").arg(filePath));
+    m_logger->info(kSrc, QStringLiteral("PDF-отчёт сохранён: %1").arg(filePath));
     return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-QString ReportGenerator::buildHeader(const SessionData&          session,
-                                      const Core::DeviceSnapshot& snap) const
+QString ReportGenerator::buildHtml(const SessionData&               session,
+                                    const Core::DeviceSnapshot&      snap,
+                                    const Core::IScenarioDispatcher* dispatcher,
+                                    const Core::LongRunResult*       longRun) const
 {
-    QString s;
-    QTextStream out(&s);
+    QString body;
+    body += htmlHeader(session, snap);
+    body += htmlStepsTable(dispatcher);
+    body += htmlTimeAnalysis(snap);
+    if (longRun)
+        body += htmlLongRun(*longRun);
+    body += htmlVerdict(dispatcher, longRun);
 
-    out << "ОБЩИЕ СВЕДЕНИЯ\n\n";
-    out << QStringLiteral("  Дата проверки    : %1\n")
-        .arg(session.sessionStart.toString("dd.MM.yyyy"));
-    out << QStringLiteral("  Начало           : %1\n")
-        .arg(session.sessionStart.toString("HH:mm:ss UTC"));
-    out << QStringLiteral("  Окончание        : %1\n")
-        .arg(session.sessionEnd.toString("HH:mm:ss UTC"));
-    out << QStringLiteral("  Оператор         : %1\n")
-        .arg(session.operatorName.isEmpty() ? "—" : session.operatorName);
-
-    out << "\nИДЕНТИФИКАЦИЯ ИЗДЕЛИЯ\n\n";
-    out << QStringLiteral("  Наименование     : %1\n")
-        .arg(snap.deviceName.isEmpty() ? "—" : snap.deviceName);
-    out << QStringLiteral("  IP-адрес         : %1\n")
-        .arg(snap.ipAddress.toString());
-    out << QStringLiteral("  MAC-адрес        : %1\n")
-        .arg(snap.macAddress.isEmpty() ? "—" : snap.macAddress);
-    out << QStringLiteral("  Версия ПО        : %1\n")
-        .arg(snap.firmwareVersion.isEmpty() ? "—" : snap.firmwareVersion);
-    out << QStringLiteral("  ID устройства    : %1\n")
-        .arg(snap.deviceId);
-    out << QStringLiteral("  Дата сборки ПО   : %1\n")
-        .arg(snap.buildDate.isEmpty() ? "—" : snap.buildDate);
-    out << QStringLiteral("  CRC ПО           : %1\n")
-        .arg(snap.crc.isEmpty() ? "—" : snap.crc);
-
-    return s;
+    return QStringLiteral(R"(
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a;">
+%1
+</body>
+</html>
+)").arg(body);
 }
 
-QString ReportGenerator::buildStepsTable(
-    const Core::IScenarioDispatcher* dispatcher) const
+QString ReportGenerator::htmlHeader(const SessionData&          s,
+                                     const Core::DeviceSnapshot& snap) const
 {
-    QString s;
-    QTextStream out(&s);
+    return QStringLiteral(R"(
+<div style="border-bottom: 3px solid #00897b; padding-bottom: 8px; margin-bottom: 16px;">
+  <h1 style="color: #00695c; font-size: 20pt; margin: 0;">
+    ПРОТОКОЛ ПРОВЕРКИ МСВ
+  </h1>
+  <p style="color: #666; font-size: 9pt; margin: 4px 0 0 0;">
+    Модуль синхронизации времени · автоматизированный стенд
+  </p>
+</div>
 
-    out << "РЕЗУЛЬТАТЫ ШАГОВ\n\n";
+<table width="100%%" cellpadding="4" style="font-size: 10pt; margin-bottom: 16px;">
+  <tr>
+    <td width="50%%" valign="top">
+      <b style="color:#00695c;">ОБЩИЕ СВЕДЕНИЯ</b><br>
+      Дата: %1<br>
+      Начало: %2<br>
+      Окончание: %3<br>
+      Оператор: %4
+    </td>
+    <td width="50%%" valign="top">
+      <b style="color:#00695c;">ИЗДЕЛИЕ</b><br>
+      %5<br>
+      IP: %6 &nbsp; MAC: %7<br>
+      Версия ПО: %8 &nbsp; ID: %9<br>
+      Сборка: %10 &nbsp; CRC: %11
+    </td>
+  </tr>
+</table>
+)")
+    .arg(s.sessionStart.toLocalTime().toString("dd.MM.yyyy"))
+    .arg(s.sessionStart.toLocalTime().toString("HH:mm:ss"))
+    .arg(s.sessionEnd.toLocalTime().toString("HH:mm:ss"))
+    .arg(s.operatorName.isEmpty() ? "—" : s.operatorName.toHtmlEscaped())
+    .arg(snap.deviceName.isEmpty() ? "—" : snap.deviceName.toHtmlEscaped())
+    .arg(snap.ipAddress.toString())
+    .arg(snap.macAddress.isEmpty() ? "—" : snap.macAddress)
+    .arg(snap.firmwareVersion.isEmpty() ? "—" : snap.firmwareVersion)
+    .arg(snap.deviceId)
+    .arg(snap.buildDate.isEmpty() ? "—" : snap.buildDate.toHtmlEscaped())
+    .arg(snap.crc.isEmpty() ? "—" : snap.crc);
+}
 
-    const auto steps   = dispatcher->allSteps();
-    const auto results = dispatcher->stepResults();
+QString ReportGenerator::htmlStepsTable(const Core::IScenarioDispatcher* d) const
+{
+    const auto steps   = d->allSteps();
+    const auto results = d->stepResults();
 
-    static const QMap<Core::StepResult, QString> tags {
-        {Core::StepResult::Pass,    "  PASS   "},
-        {Core::StepResult::Fail,    "  FAIL   "},
-        {Core::StepResult::Warning, " WARNING "},
-        {Core::StepResult::Skipped, " SKIPPED "},
-        {Core::StepResult::NotRun,  " NOT RUN "},
-    };
+    QString rows;
+    int pass = 0, fail = 0, warn = 0;
 
     for (int i = 0; i < steps.size(); ++i) {
-        const auto& step   = steps[i];
-        const auto  result = (i < results.size())
-            ? results[i] : Core::StepResult::NotRun;
+        const auto result = (i < results.size()) ? results[i] : Core::StepResult::NotRun;
 
-        const QString tag = tags.value(result, "   ???   ");
-        out << QStringLiteral("  [%1] %2. %3\n")
-            .arg(tag)
-            .arg(i + 1, 2)
-            .arg(step.title);
+        QString badge, color, bg;
+        switch (result) {
+            case Core::StepResult::Pass:
+                badge = "PASS"; color = "#1b5e20"; bg = "#e8f5e9"; pass++; break;
+            case Core::StepResult::Fail:
+                badge = "FAIL"; color = "#b71c1c"; bg = "#ffebee"; fail++; break;
+            case Core::StepResult::Warning:
+                badge = "WARNING"; color = "#e65100"; bg = "#fff3e0"; warn++; break;
+            case Core::StepResult::Skipped:
+                badge = "SKIP"; color = "#555"; bg = "#f5f5f5"; break;
+            default:
+                badge = "—"; color = "#999"; bg = "#fafafa"; break;
+        }
+
+        rows += QStringLiteral(R"(
+<tr style="background:%1;">
+  <td style="padding:6px; border-bottom:1px solid #eee; text-align:center; color:#999;">%2</td>
+  <td style="padding:6px; border-bottom:1px solid #eee;">%3</td>
+  <td style="padding:6px; border-bottom:1px solid #eee; text-align:center;">
+    <b style="color:%4;">%5</b>
+  </td>
+</tr>)")
+            .arg(bg)
+            .arg(i + 1)
+            .arg(steps[i].title.toHtmlEscaped())
+            .arg(color)
+            .arg(badge);
     }
 
-    // Подсчёт
-    int pass = 0, fail = 0, warn = 0;
-    for (const auto& r : results) {
-        if (r == Core::StepResult::Pass)    pass++;
-        if (r == Core::StepResult::Fail)    fail++;
-        if (r == Core::StepResult::Warning) warn++;
-    }
-    out << QStringLiteral("\n  Итого: PASS=%1  FAIL=%2  WARNING=%3\n")
-        .arg(pass).arg(fail).arg(warn);
-
-    return s;
+    return QStringLiteral(R"(
+<h2 style="color:#00695c; font-size:13pt; border-bottom:1px solid #ccc; padding-bottom:4px;">
+  Результаты шагов
+</h2>
+<table width="100%%" cellpadding="0" cellspacing="0" style="font-size:10pt; margin-bottom:8px;">
+  <tr style="background:#00897b; color:white;">
+    <td style="padding:6px; text-align:center; width:40px;">№</td>
+    <td style="padding:6px;">Шаг</td>
+    <td style="padding:6px; text-align:center; width:90px;">Результат</td>
+  </tr>
+  %1
+</table>
+<p style="font-size:10pt; margin-bottom:16px;">
+  Итого: <b style="color:#1b5e20;">PASS %2</b> &nbsp;
+  <b style="color:#e65100;">WARNING %3</b> &nbsp;
+  <b style="color:#b71c1c;">FAIL %4</b>
+</p>
+)").arg(rows).arg(pass).arg(warn).arg(fail);
 }
 
-QString ReportGenerator::buildTimeAnalysis(
-    const Core::DeviceSnapshot& snap) const
+QString ReportGenerator::htmlTimeAnalysis(const Core::DeviceSnapshot& snap) const
 {
-    QString s;
-    QTextStream out(&s);
-
-    out << "АНАЛИЗ СОГЛАСОВАННОСТИ ВРЕМЕНИ\n\n";
-
-    // ── Таблица источников ────────────────────────────────────────────────────
     auto fmtTime = [](const QDateTime& dt) -> QString {
         return dt.isValid()
-            ? dt.toString("dd.MM.yyyy HH:mm:ss.zzz UTC")
-            : "нет данных";
+            ? dt.toLocalTime().toString("dd.MM.yyyy HH:mm:ss.zzz")
+            : "<span style='color:#999;'>нет данных</span>";
     };
 
-    auto fmtOffset = [](qint64 ms) -> QString {
-        if (ms == LLONG_MIN) return "н/д";
+    auto fmtOff = [](qint64 ms) -> QString {
+        if (ms == LLONG_MIN) return "<span style='color:#999;'>н/д</span>";
         const QString sign = ms >= 0 ? "+" : "";
-        if (qAbs(ms) < 1000)
-            return QStringLiteral("%1%2 мс").arg(sign).arg(ms);
-        return QStringLiteral("%1%2.%3 с")
-            .arg(sign)
-            .arg(ms / 1000)
-            .arg(qAbs(ms % 1000), 3, 10, QChar('0'));
+        return QStringLiteral("%1%2 мс").arg(sign).arg(ms);
     };
 
-    out << "  Источник         Время                          Отклонение от ПК\n";
-    out << "  " << QString(76, '-') << "\n";
+    const QDateTime webT  = snap.webTime.value_or(QDateTime{});
+    const QDateTime sntpT = snap.sntpTime.value_or(QDateTime{});
+    const QDateTime gnssT = snap.gnssTime.value_or(QDateTime{});
 
-    // Системное время ПК (опорное)
-	out << "  "
-		<< QString("Система (ПК)").leftJustified(17)
-		<< fmtTime(QDateTime::currentDateTimeUtc()).leftJustified(31)
-		<< "(опорное)\n";
-
-    // Web-время
-    {
-		const QDateTime wt = snap.webTime.value_or(QDateTime{});
-        const qint64 off = offsetMs(wt, snap.webCapturedAt);
-		out << "  "
-			<< QString("Web (td)").leftJustified(17)
-			<< fmtTime(wt).leftJustified(31)
-			<< (off == LLONG_MIN ? "н/д" : fmtOffset(off)) << "\n";
-    }
-
-    // SNTP-время
-    {
-        const qint64 off = offsetMs(snap.sntpTime.value_or(QDateTime()),
-                                    snap.sntpCapturedAt);
-		out << "  "
-			<< QString("SNTP").leftJustified(17)
-			<< fmtTime(snap.sntpTime.value_or(QDateTime())).leftJustified(31)
-			<< fmtOffset(off) << "\n";
-    }
-
-    // GNSS UART
-    {
-        const qint64 off = offsetMs(snap.gnssTime.value_or(QDateTime()),
-                                    snap.gnssCapturedAt);
-		out << "  "
-			<< QString("GNSS (UART)").leftJustified(17)
-			<< fmtTime(snap.gnssTime.value_or(QDateTime())).leftJustified(31)
-			<< fmtOffset(off) << "\n";
-    }
-
-    // ── Расхождения между источниками ─────────────────────────────────────────
-    out << "\n  РАСХОЖДЕНИЯ МЕЖДУ ИСТОЧНИКАМИ\n\n";
-
-    auto diffMs = [&](const QDateTime& a, const QDateTime& captA,
-                      const QDateTime& b, const QDateTime& captB) -> qint64
-    {
-        if (!a.isValid() || !b.isValid() ||
-            !captA.isValid() || !captB.isValid())
-            return LLONG_MIN;
-        // Приводим к одному моменту через offset от ПК
-        const qint64 offA = offsetMs(a, captA);
-        const qint64 offB = offsetMs(b, captB);
-        if (offA == LLONG_MIN || offB == LLONG_MIN) return LLONG_MIN;
-        return offA - offB;
-    };
-
-	auto printDiff = [&](const QString& label, qint64 ms) {
-		out << "  "
-			<< label.leftJustified(32)
-			<< (ms == LLONG_MIN ? "н/д" : fmtOffset(ms)) << "\n";
-	};
-
-    const auto sntpTime = snap.sntpTime.value_or(QDateTime());
-    const auto gnssTime = snap.gnssTime.value_or(QDateTime());
-
-	const QDateTime webTime = snap.webTime.value_or(QDateTime{});
-
-    printDiff("Web vs SNTP:",
-        diffMs(webTime, snap.webCapturedAt,
-               sntpTime,     snap.sntpCapturedAt));
-
-    printDiff("Web vs GNSS (UART):",
-        diffMs(webTime, snap.webCapturedAt,
-               gnssTime,     snap.gnssCapturedAt));
-
-    printDiff("SNTP vs GNSS (UART):",
-        diffMs(sntpTime,     snap.sntpCapturedAt,
-               gnssTime,     snap.gnssCapturedAt));
-
-    // ── Состояние антенны ─────────────────────────────────────────────────────
-    out << "\n  СОСТОЯНИЕ АНТЕННЫ\n\n";
-    out << QStringLiteral("  Статус           : %1\n")
-        .arg(snap.antennaStatus.isEmpty() ? "—" : snap.antennaStatus);
-    out << QStringLiteral("  Статус GPS       : %1\n")
-        .arg(snap.gpsStatus.isEmpty() ? "—" : snap.gpsStatus);
-    out << QStringLiteral("  Спутников        : %1\n")
-        .arg(snap.gpsSatellites.isEmpty() ? "—" : snap.gpsSatellites);
-    out << QStringLiteral("  RTC валидность   : %1\n")
-        .arg(snap.rtcValidity.isEmpty() ? "—" : snap.rtcValidity);
-
-    return s;
+    return QStringLiteral(R"(
+<h2 style="color:#00695c; font-size:13pt; border-bottom:1px solid #ccc; padding-bottom:4px;">
+  Анализ согласованности времени
+</h2>
+<table width="100%%" cellpadding="6" cellspacing="0" style="font-size:10pt; margin-bottom:16px;">
+  <tr style="background:#f0f0f0;">
+    <td><b>Источник</b></td><td><b>Время</b></td><td><b>Отклонение от ПК</b></td>
+  </tr>
+  <tr><td>Система (ПК)</td><td>%1</td><td style="color:#999;">опорное</td></tr>
+  <tr><td>Web (td)</td><td>%2</td><td>%3</td></tr>
+  <tr><td>SNTP</td><td>%4</td><td>%5</td></tr>
+  <tr><td>GNSS (UART)</td><td>%6</td><td>%7</td></tr>
+</table>
+<table width="100%%" cellpadding="4" style="font-size:10pt; margin-bottom:16px;">
+  <tr><td><b>Антенна:</b> %8</td><td><b>GPS:</b> %9</td></tr>
+  <tr><td><b>Спутники:</b> %10</td><td><b>RTC:</b> %11</td></tr>
+</table>
+)")
+    .arg(fmtTime(QDateTime::currentDateTimeUtc()))
+    .arg(fmtTime(webT)).arg(fmtOff(offsetMs(webT, snap.webCapturedAt)))
+    .arg(fmtTime(sntpT)).arg(fmtOff(offsetMs(sntpT, snap.sntpCapturedAt)))
+    .arg(fmtTime(gnssT)).arg(fmtOff(offsetMs(gnssT, snap.gnssCapturedAt)))
+    .arg(snap.antennaStatus.isEmpty() ? "—" : snap.antennaStatus.toHtmlEscaped())
+    .arg(snap.gpsStatus.isEmpty() ? "—" : snap.gpsStatus.toHtmlEscaped())
+    .arg(snap.gpsSatellites.isEmpty() ? "—" : snap.gpsSatellites.toHtmlEscaped())
+    .arg(snap.rtcValidity.isEmpty() ? "—" : snap.rtcValidity.toHtmlEscaped());
 }
 
-QString ReportGenerator::buildVerdict(
-    const Core::IScenarioDispatcher* dispatcher) const
+QString ReportGenerator::htmlLongRun(const Core::LongRunResult& lr) const
 {
-    QString s;
-    QTextStream out(&s);
+    auto fmtStats = [](const Core::OffsetStats& st) -> QString {
+        if (st.count == 0) return "<span style='color:#999;'>нет данных</span>";
+        return QStringLiteral("мин %1 / макс %2 / среднее %3 / СКО %4 мс (n=%5)")
+            .arg(st.minMs).arg(st.maxMs)
+            .arg(QString::number(st.meanMs, 'f', 1))
+            .arg(QString::number(st.stdDevMs, 'f', 1))
+            .arg(st.count);
+    };
 
-    const auto results = dispatcher->stepResults();
+    const double checkPct = lr.nmeaTotal > 0
+        ? 100.0 * lr.nmeaOk / lr.nmeaTotal : 0.0;
 
-    const bool hasFail = std::any_of(results.begin(), results.end(),
+    return QStringLiteral(R"(
+<h2 style="color:#00695c; font-size:13pt; border-bottom:1px solid #ccc; padding-bottom:4px;">
+  Длительный мониторинг (%1 мин, %2 замеров)
+</h2>
+<table width="100%%" cellpadding="5" cellspacing="0" style="font-size:10pt; margin-bottom:16px;">
+  <tr style="background:#f0f0f0;"><td colspan="2"><b>Ошибки монотонности</b></td></tr>
+  <tr><td>Web / SNTP / GNSS</td><td>%3 / %4 / %5</td></tr>
+  <tr style="background:#f0f0f0;"><td colspan="2"><b>Расхождение с ПК</b></td></tr>
+  <tr><td>Web</td><td>%6</td></tr>
+  <tr><td>SNTP</td><td>%7</td></tr>
+  <tr><td>GNSS</td><td>%8</td></tr>
+  <tr><td>Web vs GNSS</td><td>%9</td></tr>
+  <tr style="background:#f0f0f0;"><td colspan="2"><b>NMEA / События</b></td></tr>
+  <tr><td>Checksum</td><td>%10 / %11 (%12%%)</td></tr>
+  <tr><td>Смен антенны / sync</td><td>%13 / %14</td></tr>
+</table>
+)")
+    .arg(lr.durationMinutes).arg(lr.samplesCollected)
+    .arg(lr.webMonotonErrors).arg(lr.sntpMonotonErrors).arg(lr.gnssMonotonErrors)
+    .arg(fmtStats(lr.webOffset))
+    .arg(fmtStats(lr.sntpOffset))
+    .arg(fmtStats(lr.gnssOffset))
+    .arg(fmtStats(lr.webVsGnss))
+    .arg(lr.nmeaOk).arg(lr.nmeaTotal)
+    .arg(QString::number(checkPct, 'f', 1))
+    .arg(lr.antennaChanges).arg(lr.syncStatusChanges);
+}
+
+QString ReportGenerator::htmlVerdict(const Core::IScenarioDispatcher* d,
+                                      const Core::LongRunResult* lr) const
+{
+    const auto results = d->stepResults();
+
+    bool hasFail = std::any_of(results.begin(), results.end(),
         [](Core::StepResult r){ return r == Core::StepResult::Fail; });
-    const bool hasWarn = std::any_of(results.begin(), results.end(),
+    bool hasWarn = std::any_of(results.begin(), results.end(),
         [](Core::StepResult r){ return r == Core::StepResult::Warning; });
 
-    out << "ИТОГОВАЯ ОЦЕНКА\n\n";
-
-    if (hasFail) {
-        out << "  ╔══════════════════════════════╗\n";
-        out << "  ║         НЕ ГОДЕН             ║\n";
-        out << "  ╚══════════════════════════════╝\n";
-        out << "\n  Один или несколько шагов завершились с результатом FAIL.\n";
-    } else if (hasWarn) {
-        out << "  ╔══════════════════════════════╗\n";
-        out << "  ║    ГОДЕН С ЗАМЕЧАНИЯМИ       ║\n";
-        out << "  ╚══════════════════════════════╝\n";
-        out << "\n  Все шаги пройдены, имеются предупреждения (WARNING).\n";
-    } else {
-        out << "  ╔══════════════════════════════╗\n";
-        out << "  ║            ГОДЕН             ║\n";
-        out << "  ╚══════════════════════════════╝\n";
-        out << "\n  Все шаги пройдены без замечаний.\n";
+    if (lr) {
+        if (lr->webMonotonErrors > 2 || lr->sntpMonotonErrors > 2 ||
+            lr->gnssMonotonErrors > 5) hasFail = true;
+        if (lr->antennaChanges > 0 || lr->syncStatusChanges > 2) hasWarn = true;
     }
 
-    return s;
+    QString verdict, color, bg;
+    if (hasFail) {
+        verdict = "НЕ ГОДЕН"; color = "#b71c1c"; bg = "#ffebee";
+    } else if (hasWarn) {
+        verdict = "ГОДЕН С ЗАМЕЧАНИЯМИ"; color = "#e65100"; bg = "#fff3e0";
+    } else {
+        verdict = "ГОДЕН"; color = "#1b5e20"; bg = "#e8f5e9";
+    }
+
+    return QStringLiteral(R"(
+<div style="background:%1; border:2px solid %2; border-radius:6px;
+            padding:14px; text-align:center; margin-top:16px;">
+  <span style="color:%2; font-size:18pt; font-weight:bold;">%3</span>
+</div>
+)").arg(bg, color, verdict);
 }
 
-qint64 ReportGenerator::offsetMs(const QDateTime& sourceTime,
-                                   const QDateTime& capturedAt)
+qint64 ReportGenerator::offsetMs(const QDateTime& src, const QDateTime& captured)
 {
-    if (!sourceTime.isValid() || !capturedAt.isValid())
-        return LLONG_MIN;
-    return capturedAt.msecsTo(sourceTime);
+    if (!src.isValid() || !captured.isValid()) return LLONG_MIN;
+    return captured.msecsTo(src);
 }
 
 } // namespace Msv::Report

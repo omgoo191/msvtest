@@ -2,6 +2,7 @@
 
 #include "core/IDeviceModel.h"
 #include "core/IScenarioDispatcher.h"
+#include "core/LongRunMonitor.h"
 #include "core/ILogger.h"
 #include <QString>
 #include <QDateTime>
@@ -9,10 +10,6 @@
 
 namespace Msv::Report {
 
-// ─────────────────────────────────────────────────────────────────────────────
-/// Данные сессии для отчёта.
-/// Заполняется перед вызовом generate().
-// ─────────────────────────────────────────────────────────────────────────────
 struct SessionData {
     QString   operatorName;
     QDateTime sessionStart;
@@ -20,38 +17,35 @@ struct SessionData {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-/// Генератор итогового протокола проверки.
-///
-/// Формирует текстовый файл с разделами:
-///   1. Заголовок (дата, оператор, изделие)
-///   2. Результаты шагов (PASS/FAIL/WARNING)
-///   3. Анализ согласованности времени (offsets)
-///   4. Итоговая оценка
+/// Генератор итогового протокола проверки в PDF.
+/// Верстает HTML, рендерит в PDF через QTextDocument + QPrinter.
 // ─────────────────────────────────────────────────────────────────────────────
 class ReportGenerator {
 public:
     explicit ReportGenerator(std::shared_ptr<Core::ILogger> logger);
 
-    /// Сгенерировать отчёт и сохранить в filePath.
-    /// Возвращает true при успехе.
-    bool generate(const SessionData&                session,
-                  const Core::DeviceSnapshot&       snapshot,
-                  const Core::IScenarioDispatcher*  dispatcher,
-                  const QString&                    filePath);
+    /// Сгенерировать PDF-отчёт.
+    /// longRun может быть nullptr если длительный тест не проводился.
+    bool generatePdf(const SessionData&                session,
+                     const Core::DeviceSnapshot&       snapshot,
+                     const Core::IScenarioDispatcher*  dispatcher,
+                     const Core::LongRunResult*        longRun,
+                     const QString&                    filePath);
 
 private:
-    QString buildHeader    (const SessionData& session,
-                            const Core::DeviceSnapshot& snap) const;
+    QString buildHtml(const SessionData&               session,
+                      const Core::DeviceSnapshot&      snap,
+                      const Core::IScenarioDispatcher* dispatcher,
+                      const Core::LongRunResult*       longRun) const;
 
-    QString buildStepsTable(const Core::IScenarioDispatcher* dispatcher) const;
+    QString htmlHeader      (const SessionData& s, const Core::DeviceSnapshot& snap) const;
+    QString htmlStepsTable  (const Core::IScenarioDispatcher* d) const;
+    QString htmlTimeAnalysis(const Core::DeviceSnapshot& snap) const;
+    QString htmlLongRun     (const Core::LongRunResult& lr) const;
+    QString htmlVerdict     (const Core::IScenarioDispatcher* d,
+                             const Core::LongRunResult* lr) const;
 
-    QString buildTimeAnalysis(const Core::DeviceSnapshot& snap) const;
-
-    QString buildVerdict   (const Core::IScenarioDispatcher* dispatcher) const;
-
-    /// Offset в мс: источник - ПК.
-    static qint64 offsetMs(const QDateTime& sourceTime,
-                            const QDateTime& capturedAt);
+    static qint64 offsetMs(const QDateTime& src, const QDateTime& captured);
 
     std::shared_ptr<Core::ILogger> m_logger;
     static constexpr const char*   kSrc = "ReportGenerator";

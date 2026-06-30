@@ -21,14 +21,23 @@ LongRunMonitor::LongRunMonitor(IDeviceModel*            deviceModel,
 {
     m_pollTimer   = new QTimer(this);
     m_finishTimer = new QTimer(this);
+	m_tickTimer =  new QTimer(this);
+	m_tickTimer->setInterval(1000);
     m_pollTimer->setSingleShot(false);
     m_finishTimer->setSingleShot(true);
 
     connect(m_pollTimer,   &QTimer::timeout, this, &LongRunMonitor::onPollTick);
     connect(m_finishTimer, &QTimer::timeout, this, &LongRunMonitor::onFinished);
+	connect(m_tickTimer, &QTimer::timeout, this, [this]() {
+		if(!m_running) return ;
+		const int elapsed = static_cast<int>(
+				m_startTime.secsTo(QDateTime::currentDateTimeUtc()));
+		qDebug() << "TICK emit" << elapsed;
+		emit tick(elapsed, m_totalSec);
+	});
 
 	m_displayTimer = new QTimer(this);
-	m_displayTimer->setInterval(4000);
+	m_displayTimer->setInterval(1000);
 	connect(m_displayTimer, &QTimer::timeout, this, [this]() {
 		if (!m_running) return;
 		// Берём текущий снимок из модели напрямую
@@ -101,7 +110,7 @@ void LongRunMonitor::start(int durationMinutes, const QHostAddress& deviceIp)
 
     m_pollTimer->start(30000);           // опрос каждые 30 секунд
     m_finishTimer->start(m_totalSec * 1000);
-
+	m_tickTimer->start();
     // Первый опрос сразу
     onPollTick();
 }
@@ -113,6 +122,7 @@ void LongRunMonitor::stop()
     m_running = false;
     m_pollTimer->stop();
     m_finishTimer->stop();
+	m_tickTimer->stop();
     if (m_uartMonitor) m_uartMonitor->disconnect(this);
     m_webClient->disconnect(this);
     m_sntpClient->disconnect(this);
@@ -275,6 +285,7 @@ void LongRunMonitor::onFinished()
 {
     m_running = false;
     m_pollTimer->stop();
+	m_tickTimer->stop();
 	m_displayTimer->stop();
     if (m_uartMonitor) m_uartMonitor->disconnect(this);
     m_webClient->disconnect(this);

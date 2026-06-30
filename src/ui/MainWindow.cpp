@@ -26,6 +26,7 @@
 #include <QFontDatabase>
 #include <QScrollBar>
 #include <QTimer>
+#include <QFileDialog>
 
 namespace Msv::Ui {
 
@@ -289,357 +290,378 @@ void MainWindow::applyTheme()
             font-size: 8pt;
             border-top: 1px solid #1e1e1e;
         }
+
+		QFrame#currentStepZone {
+			background-color: #131313;
+			border-bottom: 1px solid #1e1e1e;
+		}
+		QPushButton#logFilterBtn {
+			background: transparent;
+			color: #505050;
+			border: 1px solid #252525;
+			border-radius: 12px;
+			padding: 2px 14px;
+			font-size: 8pt;
+		}
+		QPushButton#logFilterBtn:hover { color: #909090; border-color: #383838; }
+		QPushButton#logFilterBtn:checked {
+			background-color: #0d2137;
+			color: #00e5cc;
+			border-color: #00e5cc;
+		}
+		QPushButton#clearFilterBtn {
+			background: transparent;
+			color: #ff9800;
+			border: 1px solid #5a3a00;
+			border-radius: 12px;
+			padding: 2px 12px;
+			font-size: 8pt;
+		}
+		QPushButton#clearFilterBtn:hover { background-color: #1a1000; }
     )");
 }
 
 // ── Построение UI ─────────────────────────────────────────────────────────────
 
-void MainWindow::buildUi()
-{
-    auto* central = new QWidget(this);
-    setCentralWidget(central);
-    auto* rootLayout = new QVBoxLayout(central);
-    rootLayout->setContentsMargins(0, 0, 0, 0);
-    rootLayout->setSpacing(0);
-
-	// ════════════════════════════════════════════════════════════════════════
-	// TOP BAR
-	// ════════════════════════════════════════════════════════════════════════
+	void MainWindow::buildUi()
 	{
-		auto* bar = new QFrame(central);
-		bar->setObjectName("topBar");
-		bar->setFixedHeight(56);
-		auto* barLayout = new QHBoxLayout(bar);
-		barLayout->setContentsMargins(20, 0, 20, 0);
-		barLayout->setSpacing(0);
+		auto* central = new QWidget(this);
+		setCentralWidget(central);
+		auto* rootLayout = new QVBoxLayout(central);
+		rootLayout->setContentsMargins(0, 0, 0, 0);
+		rootLayout->setSpacing(0);
 
-		// Логотип / название
-		auto* appName = new QLabel("МСВ ТЕСТЕР", bar);
-		appName->setStyleSheet(
-				"color: #00e5cc;"
-				"font-size: 12pt;"
-				"font-weight: bold;"
-				"letter-spacing: 3px;"
-				"font-family: 'JetBrains Mono', 'Consolas', monospace;"
-		);
-
-		auto* version = new QLabel("  v0.1", bar);
-		version->setStyleSheet("color: #303030; font-size: 9pt;");
-
-		// Данные устройства
-		m_deviceLabel = new QLabel("устройство не обнаружено", bar);
-		m_deviceLabel->setStyleSheet(
-				"color: #484848;"
-				"font-size: 9pt;"
-				"font-family: 'JetBrains Mono', 'Consolas', monospace;"
-		);
-
-		// Добавляем виджеты в layout с явным выравниванием по центру вертикали (Qt::AlignVCenter)
-		barLayout->addWidget(appName, 0, Qt::AlignVCenter);
-		barLayout->addWidget(version, 0, Qt::AlignVCenter);
-		barLayout->addSpacing(24);
-		barLayout->addWidget(m_deviceLabel, 1, Qt::AlignVCenter); // Растягивается (stretch: 1)
-
-		// Статус-индикатор (справа)
-		m_statusDot  = new QLabel(bar);
-		m_statusDot->setFixedSize(8, 8);
-		m_statusText = new QLabel("ГОТОВ", bar);
-
-		// Стартовый цвет делаем через background-color
-		m_statusDot->setStyleSheet("background-color: #303030; border-radius: 4px;");
-		m_statusText->setStyleSheet(
-				"color: #404040;"
-				"font-size: 8pt;"
-				"font-weight: bold;"
-				"letter-spacing: 2px;"
-		);
-
-		// Кружок и текст статуса тоже выравниваем по центру вертикали
-		barLayout->addWidget(m_statusDot, 0, Qt::AlignVCenter);
-		barLayout->addSpacing(8); // Чуть увеличил отступ для красоты
-		barLayout->addWidget(m_statusText, 0, Qt::AlignVCenter);
-
-		rootLayout->addWidget(bar);
-
-		// Прогрессбар — тонкая полоска под шапкой
-		m_progressBar = new QProgressBar(central);
-		m_progressBar->setRange(0, 100);
-		m_progressBar->setValue(0);
-		m_progressBar->setTextVisible(false);
-		m_progressBar->setFixedHeight(3);
-		rootLayout->addWidget(m_progressBar);
-
-
-        // Прогрессбар — тонкая полоска под шапкой
-        m_progressBar = new QProgressBar(central);
-        m_progressBar->setRange(0, 100);
-        m_progressBar->setValue(0);
-        m_progressBar->setTextVisible(false);
-        m_progressBar->setFixedHeight(3);
-        rootLayout->addWidget(m_progressBar);
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
-    // MAIN SPLITTER  (верт: рабочая зона | лог)
-    // ════════════════════════════════════════════════════════════════════════
-    auto* vSplit = new QSplitter(Qt::Vertical, central);
-    vSplit->setHandleWidth(1);
-    rootLayout->addWidget(vSplit, 1);
-
-    // ────────────────────────────────────────────────────────────────────────
-    // Горизонтальный сплиттер: ШАГИ (слева) | ГЛАВНАЯ ПАНЕЛЬ (справа)
-    // ────────────────────────────────────────────────────────────────────────
-    auto* hSplit = new QSplitter(Qt::Horizontal, vSplit);
-    hSplit->setHandleWidth(1);
-
-    // ── ШАГИ (левая панель) ──────────────────────────────────────────────────
-    {
-        auto* stepsFrame = new QFrame(hSplit);
-        stepsFrame->setObjectName("stepsPanel");
-        stepsFrame->setMinimumWidth(240);
-        stepsFrame->setMaximumWidth(340);
-        auto* fl = new QVBoxLayout(stepsFrame);
-        fl->setContentsMargins(0, 16, 0, 0);
-        fl->setSpacing(0);
-
-        auto* header = new QLabel("ПЛАН ПРОВЕРКИ", stepsFrame);
-        header->setObjectName("sectionLabel");
-        header->setContentsMargins(16, 0, 0, 12);
-        fl->addWidget(header);
-
-        auto* separator = new QFrame(stepsFrame);
-        separator->setFrameShape(QFrame::HLine);
-        separator->setStyleSheet("color: #1e1e1e;");
-        fl->addWidget(separator);
-
-        auto* scroll = new QScrollArea(stepsFrame);
-        scroll->setWidgetResizable(true);
-        scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        scroll->setFrameShape(QFrame::NoFrame);
-        scroll->setStyleSheet("QScrollArea { background: transparent; }");
-
-        m_stepsContainer = new QWidget(scroll);
-        m_stepsContainer->setStyleSheet("background: transparent;");
-        auto* stepsLayout = new QVBoxLayout(m_stepsContainer);
-        stepsLayout->setContentsMargins(0, 4, 0, 4);
-        stepsLayout->setSpacing(0);
-        scroll->setWidget(m_stepsContainer);
-        fl->addWidget(scroll, 1);
-
-        hSplit->addWidget(stepsFrame);
-    }
-
-    // ── ГЛАВНАЯ ПАНЕЛЬ ───────────────────────────────────────────────────────
-    {
-		m_rightTabs = new QTabWidget(hSplit);
-		m_rightTabs->setObjectName("rightTabs");
-
-		auto* mainWidget = new QWidget(m_rightTabs);
-		auto* ml = new QVBoxLayout(mainWidget);
-		ml->setContentsMargins(28, 24, 28, 20);
-		ml->setSpacing(16);
-
-		// Заголовок текущего шага
+		// ════════════════════════════════════════════════════════════════════════
+		// TOP BAR
+		// ════════════════════════════════════════════════════════════════════════
 		{
-			auto* stepHeader = new QWidget(mainWidget);
-			auto* hl = new QHBoxLayout(stepHeader);
-			hl->setContentsMargins(0, 0, 0, 0);
-			hl->setSpacing(16);
+			auto* bar = new QFrame(central);
+			bar->setObjectName("topBar");
+			bar->setFixedHeight(56);
+			auto* barLayout = new QHBoxLayout(bar);
+			barLayout->setContentsMargins(20, 0, 20, 0);
+			barLayout->setSpacing(0);
 
-			m_stepIndexLabel = new QLabel("—", stepHeader);
-			m_stepIndexLabel->setObjectName("stepIndex");
-			m_stepIndexLabel->setFixedWidth(52);
+			auto* appName = new QLabel("МСВ ТЕСТЕР", bar);
+			appName->setStyleSheet(
+					"color: #00e5cc; font-size: 12pt; font-weight: bold;"
+					"letter-spacing: 3px; font-family: 'JetBrains Mono', 'Consolas', monospace;");
 
-			auto* titleCol = new QVBoxLayout;
-			titleCol->setSpacing(4);
+			auto* version = new QLabel("  v0.1", bar);
+			version->setStyleSheet("color: #303030; font-size: 9pt;");
 
-			m_stepTitleLabel = new QLabel("Ожидание запуска", stepHeader);
-			m_stepTitleLabel->setObjectName("stepTitle");
+			m_deviceLabel = new QLabel("устройство не обнаружено", bar);
+			m_deviceLabel->setStyleSheet(
+					"color: #484848; font-size: 9pt;"
+					"font-family: 'JetBrains Mono', 'Consolas', monospace;");
 
-			m_stepTypeLabel = new QLabel("", stepHeader);
-			m_stepTypeLabel->setObjectName("stepType");
+			barLayout->addWidget(appName, 0, Qt::AlignVCenter);
+			barLayout->addWidget(version, 0, Qt::AlignVCenter);
+			barLayout->addSpacing(24);
+			barLayout->addWidget(m_deviceLabel, 1, Qt::AlignVCenter);
 
-			titleCol->addWidget(m_stepTitleLabel);
-			titleCol->addWidget(m_stepTypeLabel);
+			m_statusDot = new QLabel(bar);
+			m_statusDot->setFixedSize(8, 8);
+			m_statusText = new QLabel("ГОТОВ", bar);
+			m_statusDot->setStyleSheet("background-color: #303030; border-radius: 4px;");
+			m_statusText->setStyleSheet(
+					"color: #404040; font-size: 8pt; font-weight: bold; letter-spacing: 2px;");
 
-			hl->addWidget(m_stepIndexLabel);
-			hl->addLayout(titleCol, 1);
-			ml->addWidget(stepHeader);
+			barLayout->addWidget(m_statusDot, 0, Qt::AlignVCenter);
+			barLayout->addSpacing(8);
+			barLayout->addWidget(m_statusText, 0, Qt::AlignVCenter);
+
+			rootLayout->addWidget(bar);
+
+			m_progressBar = new QProgressBar(central);
+			m_progressBar->setRange(0, 100);
+			m_progressBar->setValue(0);
+			m_progressBar->setTextVisible(false);
+			m_progressBar->setFixedHeight(3);
+			rootLayout->addWidget(m_progressBar);
 		}
 
-		// Карточка инструкции
+		// ════════════════════════════════════════════════════════════════════════
+		// Горизонтальный сплиттер: ШАГИ | ПРАВАЯ ЗОНА
+		// ════════════════════════════════════════════════════════════════════════
+		auto* hSplit = new QSplitter(Qt::Horizontal, central);
+		hSplit->setHandleWidth(1);
+		rootLayout->addWidget(hSplit, 1);
+
+		// ── ШАГИ (левая панель) ──────────────────────────────────────────────────
 		{
-			auto* card = new QFrame(mainWidget);
-			card->setObjectName("card");
-			card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-			auto* cl = new QVBoxLayout(card);
-			cl->setContentsMargins(18, 14, 18, 14);
-			cl->setSpacing(8);
+			auto* stepsFrame = new QFrame(hSplit);
+			stepsFrame->setObjectName("stepsPanel");
+			stepsFrame->setMinimumWidth(240);
+			stepsFrame->setMaximumWidth(340);
+			auto* fl = new QVBoxLayout(stepsFrame);
+			fl->setContentsMargins(0, 16, 0, 0);
+			fl->setSpacing(0);
 
-			auto* promptHeaderRow = new QHBoxLayout;
-			promptHeaderRow->setContentsMargins(0, 0, 0, 0);
+			auto* header = new QLabel("ПЛАН ПРОВЕРКИ", stepsFrame);
+			header->setObjectName("sectionLabel");
+			header->setContentsMargins(16, 0, 0, 12);
+			fl->addWidget(header);
 
-			m_promptHeader = new QLabel("ИНСТРУКЦИЯ", card);
-			m_promptHeader->setObjectName("promptHeader");
-			promptHeaderRow->addWidget(m_promptHeader, 1);
+			auto* separator = new QFrame(stepsFrame);
+			separator->setFrameShape(QFrame::HLine);
+			separator->setStyleSheet("color: #1e1e1e;");
+			fl->addWidget(separator);
 
-			m_antennaIndicator = new QLabel(card);
-			m_antennaIndicator->setText("АНТЕННА: —");
-			m_antennaIndicator->setStyleSheet(
-					"color: #404040; font-size: 8pt; font-weight: bold; letter-spacing: 1px;");
-			promptHeaderRow->addWidget(m_antennaIndicator);
-			cl->addLayout(promptHeaderRow);
+			auto* scroll = new QScrollArea(stepsFrame);
+			scroll->setWidgetResizable(true);
+			scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+			scroll->setFrameShape(QFrame::NoFrame);
+			scroll->setStyleSheet("QScrollArea { background: transparent; }");
 
-			auto* promptEdit = new QTextEdit(card);
-			promptEdit->setObjectName("thePromptEdit");
-			promptEdit->setReadOnly(true);
-			promptEdit->setFrameShape(QFrame::NoFrame);
-			promptEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-			promptEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-			promptEdit->setStyleSheet(
-					"QTextEdit#thePromptEdit {"
-					"  background: transparent; color: #c0c0c0;"
-					"  font-size: 11pt; border: none; padding: 0px;"
-					"}"
-			);
-			promptEdit->setPlainText("Нажмите «ЗАПУСТИТЬ» для начала сценария проверки.");
-			m_promptBody = nullptr;
-			cl->addWidget(promptEdit, 1);
-			ml->addWidget(card, 1);
+			m_stepsContainer = new QWidget(scroll);
+			m_stepsContainer->setStyleSheet("background: transparent;");
+			auto* stepsLayout = new QVBoxLayout(m_stepsContainer);
+			stepsLayout->setContentsMargins(0, 4, 0, 4);
+			stepsLayout->setSpacing(0);
+			scroll->setWidget(m_stepsContainer);
+			fl->addWidget(scroll, 1);
+
+			hSplit->addWidget(stepsFrame);
 		}
 
-		// Кнопки
+		// ── ПРАВАЯ ЗОНА:
+		// вертикальный сплиттер (текущий шаг | вкладки) ────────────
 		{
-			auto* btnRow = new QHBoxLayout;
-			btnRow->setSpacing(10);
+			auto* vSplit = new QSplitter(Qt::Vertical, hSplit);
+			vSplit->setHandleWidth(1);
 
-			m_startBtn       = new QPushButton("▶   ЗАПУСТИТЬ", mainWidget);
-			m_confirmBtn     = new QPushButton("✔   ВЫПОЛНЕНО", mainWidget);
-			m_abortBtn       = new QPushButton("ПРЕРВАТЬ",      mainWidget);
-			m_continueBtn    = new QPushButton("ДАЛЕЕ",         mainWidget);
-			m_restartFromBtn = new QPushButton("↺  ОТСЮДА",    mainWidget);
-			m_devModeBtn     = new QPushButton("DEV",           mainWidget);
+			// ─── ВЕРХ: текущий шаг (компактно, по контенту) ───────────────────────
+			{
+				auto* topZone = new QFrame(vSplit);
+				topZone->setObjectName("currentStepZone");
+				auto* tl = new QVBoxLayout(topZone);
+				tl->setContentsMargins(24, 18, 24, 16);
+				tl->setSpacing(12);
 
-			m_startBtn      ->setObjectName("startBtn");
-			m_confirmBtn    ->setObjectName("confirmBtn");
-			m_abortBtn      ->setObjectName("abortBtn");
-			m_continueBtn   ->setObjectName("continueBtn");
-			m_restartFromBtn->setObjectName("restartFromBtn");
-			m_devModeBtn    ->setObjectName("devModeBtn");
+				// Шапка: индекс + название + таймер + антенна
+				{
+					auto* head = new QHBoxLayout;
+					head->setSpacing(14);
 
-			for (auto* btn : {m_startBtn, m_confirmBtn, m_abortBtn,
-							  m_continueBtn, m_restartFromBtn})
-				btn->setFixedHeight(40);
+					m_stepIndexLabel = new QLabel("—", topZone);
+					m_stepIndexLabel->setObjectName("stepIndex");
+					m_stepIndexLabel->setFixedWidth(48);
 
-			m_devModeBtn->setFixedSize(56, 40);
-			m_devModeBtn->setCheckable(true);
-			m_restartFromBtn->setEnabled(false);
+					auto* titleCol = new QVBoxLayout;
+					titleCol->setSpacing(2);
 
-			m_longRunBtn = new QPushButton("⏱", mainWidget);
-			m_longRunBtn->setObjectName("longRunBtn");
-			m_longRunBtn->setFixedSize(40, 40);
-			m_longRunBtn->setToolTip("Длительный мониторинг");
+					m_stepTitleLabel = new QLabel("Ожидание запуска", topZone);
+					m_stepTitleLabel->setObjectName("stepTitle");
 
-			btnRow->addWidget(m_longRunBtn);
-			btnRow->addWidget(m_restartFromBtn);
-			btnRow->addWidget(m_continueBtn);
-			btnRow->addWidget(m_startBtn);
-			btnRow->addWidget(m_confirmBtn);
-			btnRow->addStretch(1);
-			btnRow->addWidget(m_abortBtn);
-			btnRow->addWidget(m_devModeBtn);
-			ml->addLayout(btnRow);
-		}
+					m_stepTypeLabel = new QLabel("", topZone);
+					m_stepTypeLabel->setObjectName("stepType");
 
-		// Вкладка сводки
-		auto* summaryWidget = new QWidget(m_rightTabs);
-		auto* summaryLayout = new QVBoxLayout(summaryWidget);
-		summaryLayout->setContentsMargins(0, 0, 0, 0);
-		summaryLayout->setSpacing(0);
+					titleCol->addWidget(m_stepTitleLabel);
+					titleCol->addWidget(m_stepTypeLabel);
 
-		auto* summaryScroll = new QScrollArea(summaryWidget);
-		summaryScroll->setWidgetResizable(true);
-		summaryScroll->setFrameShape(QFrame::NoFrame);
-		summaryScroll->setStyleSheet("QScrollArea { background: #0e0e0e; border: none; }");
+					m_antennaIndicator = new QLabel(topZone);
+					m_antennaIndicator->setText("АНТЕННА: —");
+					m_antennaIndicator->setStyleSheet(
+							"color: #404040; font-size: 8pt; font-weight: bold; letter-spacing: 1px;");
 
-		m_summaryContainer = new QWidget(summaryScroll);
-		m_summaryContainer->setStyleSheet("background: #0e0e0e;");
-		auto* containerLayout = new QVBoxLayout(m_summaryContainer);
-		containerLayout->setContentsMargins(0, 0, 0, 0);
-		containerLayout->setSpacing(0);
-		containerLayout->addStretch(1);
+					head->addWidget(m_stepIndexLabel);
+					head->addLayout(titleCol, 1);
+					head->addWidget(m_antennaIndicator, 0, Qt::AlignTop);
+					tl->addLayout(head);
+				}
 
-		summaryScroll->setWidget(m_summaryContainer);
-		summaryLayout->addWidget(summaryScroll);
+				// Инструкция (растёт по контенту, без скролла-распухания)
+				auto* promptEdit = new QTextEdit(topZone);
+				promptEdit->setObjectName("thePromptEdit");
+				promptEdit->setReadOnly(true);
+				promptEdit->setFrameShape(QFrame::NoFrame);
+				promptEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+				promptEdit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+				promptEdit->setStyleSheet(
+						"QTextEdit#thePromptEdit {"
+						"  background: transparent; color: #c8c8c8;"
+						"  font-size: 11pt; border: none; padding: 0px;"
+						"}");
+				promptEdit->setPlainText("Нажмите «ЗАПУСТИТЬ» для начала сценария проверки.");
+				promptEdit->setMinimumHeight(48);
+				m_promptBody = nullptr;
+				tl->addWidget(promptEdit, 1);
 
-		m_rightTabs->addTab(mainWidget,    "  ИНСТРУКЦИЯ  ");
-		m_rightTabs->addTab(summaryWidget, "  СВОДКА  ");
+				// Живые данные (скрыты пока шаг не отдаёт прогресс)
+				m_liveDataLabel = new QLabel(topZone);
+				m_liveDataLabel->setObjectName("liveData");
+				m_liveDataLabel->setWordWrap(true);
+				m_liveDataLabel->setStyleSheet(
+						"QLabel#liveData {"
+						"  background-color: #0a1a1a; color: #00e5cc;"
+						"  font-family: 'JetBrains Mono', 'Consolas', monospace;"
+						"  font-size: 9pt; padding: 8px 12px;"
+						"  border-left: 2px solid #00e5cc; border-radius: 2px;"
+						"}");
+				m_liveDataLabel->hide();
+				tl->addWidget(m_liveDataLabel);
 
-		hSplit->addWidget(m_rightTabs);
-	}
+				// Кнопки
+				{
+					auto* btnRow = new QHBoxLayout;
+					btnRow->setSpacing(10);
 
-    hSplit->setStretchFactor(0, 0);
-    hSplit->setStretchFactor(1, 1);
-    vSplit->addWidget(hSplit);
+					m_startBtn       = new QPushButton("▶   ЗАПУСТИТЬ", topZone);
+					m_confirmBtn     = new QPushButton("✔   ВЫПОЛНЕНО", topZone);
+					m_abortBtn       = new QPushButton("ПРЕРВАТЬ",      topZone);
+					m_continueBtn    = new QPushButton("ДАЛЕЕ",         topZone);
+					m_restartFromBtn = new QPushButton("↺  ОТСЮДА",    topZone);
+					m_devModeBtn     = new QPushButton("DEV",           topZone);
+					m_longRunBtn     = new QPushButton("LR",            topZone);
 
-    // ── ЛОГ (нижняя панель) ──────────────────────────────────────────────────
-    {
-        auto* logFrame = new QFrame(vSplit);
-        logFrame->setObjectName("logPanel");
-        auto* ll = new QVBoxLayout(logFrame);
-        ll->setContentsMargins(0, 0, 0, 0);
-        ll->setSpacing(0);
+					m_startBtn      ->setObjectName("startBtn");
+					m_confirmBtn    ->setObjectName("confirmBtn");
+					m_abortBtn      ->setObjectName("abortBtn");
+					m_continueBtn   ->setObjectName("continueBtn");
+					m_restartFromBtn->setObjectName("restartFromBtn");
+					m_devModeBtn    ->setObjectName("devModeBtn");
+					m_longRunBtn    ->setObjectName("longRunBtn");
 
-        auto* logHeader = new QWidget(logFrame);
-        logHeader->setFixedHeight(32);
-        logHeader->setStyleSheet("background: #0e0e0e;");
-        auto* lhl = new QHBoxLayout(logHeader);
-        lhl->setContentsMargins(16, 0, 16, 0);
+					for (auto* btn : {m_startBtn, m_confirmBtn, m_abortBtn,
+									  m_continueBtn, m_restartFromBtn})
+						btn->setFixedHeight(40);
 
-        auto* logLabel = new QLabel("ЖУРНАЛ СОБЫТИЙ", logHeader);
-		auto* clearFilterBtn = new QPushButton("× сброс", logHeader);
-		m_clearFilterBtn = clearFilterBtn;
-		clearFilterBtn->setObjectName("clearFilterBtn");
-		clearFilterBtn->setStyleSheet(
-				"QPushButton { background: transparent; color: #404040;"
-				" border: none; font-size: 8pt; }"
-				"QPushButton:hover { color: #909090; }");
-		clearFilterBtn->hide();
-		lhl->addWidget(clearFilterBtn);
+					m_devModeBtn->setFixedSize(56, 40);
+					m_devModeBtn->setCheckable(true);
+					m_longRunBtn->setFixedSize(48, 40);
+					m_longRunBtn->setToolTip("Длительный мониторинг");
+					m_restartFromBtn->setEnabled(false);
 
-		connect(clearFilterBtn, &QPushButton::clicked, this, [this, clearFilterBtn]() {
-			m_logView->clear();
-			if (m_logModel) {
-				const auto all = m_logModel->entries();
-				for (const auto& e : all)
-					onLogEntryAdded(e);
+					btnRow->addWidget(m_longRunBtn);
+					btnRow->addWidget(m_restartFromBtn);
+					btnRow->addWidget(m_continueBtn);
+					btnRow->addWidget(m_startBtn);
+					btnRow->addWidget(m_confirmBtn);
+					btnRow->addStretch(1);
+					btnRow->addWidget(m_abortBtn);
+					btnRow->addWidget(m_devModeBtn);
+					tl->addLayout(btnRow);
+				}
+
+				vSplit->addWidget(topZone);
 			}
-			clearFilterBtn->hide();
+
+			// ─── НИЗ: вкладки СВОДКА / ЖУРНАЛ ─────────────────────────────────────
+			{
+				m_rightTabs = new QTabWidget(vSplit);
+				m_rightTabs->setObjectName("rightTabs");
+
+				// Вкладка СВОДКА
+				auto* summaryWidget = new QWidget(m_rightTabs);
+				auto* summaryLayout = new QVBoxLayout(summaryWidget);
+				summaryLayout->setContentsMargins(0, 0, 0, 0);
+				summaryLayout->setSpacing(0);
+
+				auto* summaryScroll = new QScrollArea(summaryWidget);
+				summaryScroll->setWidgetResizable(true);
+				summaryScroll->setFrameShape(QFrame::NoFrame);
+				summaryScroll->setStyleSheet("QScrollArea { background: #0e0e0e; border: none; }");
+
+				m_summaryContainer = new QWidget(summaryScroll);
+				m_summaryContainer->setStyleSheet("background: #0e0e0e;");
+				auto* containerLayout = new QVBoxLayout(m_summaryContainer);
+				containerLayout->setContentsMargins(0, 0, 0, 0);
+				containerLayout->setSpacing(0);
+				containerLayout->addStretch(1);
+
+				summaryScroll->setWidget(m_summaryContainer);
+				summaryLayout->addWidget(summaryScroll);
+
+				// Вкладка ЖУРНАЛ
+				auto* logWidget = new QWidget(m_rightTabs);
+				auto* logLayout = new QVBoxLayout(logWidget);
+				logLayout->setContentsMargins(0, 0, 0, 0);
+				logLayout->setSpacing(0);
+
+				// Панель фильтров журнала
+				auto* logToolbar = new QWidget(logWidget);
+				logToolbar->setFixedHeight(38);
+				logToolbar->setStyleSheet("background: #0e0e0e;");
+				auto* ltl = new QHBoxLayout(logToolbar);
+				ltl->setContentsMargins(12, 0, 12, 0);
+				ltl->setSpacing(6);
+
+				m_logFilterAll  = new QPushButton("Всё", logToolbar);
+				m_logFilterWarn = new QPushButton("Важное", logToolbar);
+				m_logFilterErr  = new QPushButton("Ошибки", logToolbar);
+
+				for (auto* b : {m_logFilterAll, m_logFilterWarn, m_logFilterErr}) {
+					b->setObjectName("logFilterBtn");
+					b->setCheckable(true);
+					b->setFixedHeight(24);
+				}
+				m_logFilterAll->setChecked(true);
+
+				m_clearFilterBtn = new QPushButton("× сброс шага", logToolbar);
+				m_clearFilterBtn->setObjectName("clearFilterBtn");
+				m_clearFilterBtn->hide();
+
+				ltl->addWidget(m_logFilterAll);
+				ltl->addWidget(m_logFilterWarn);
+				ltl->addWidget(m_logFilterErr);
+				ltl->addStretch();
+				ltl->addWidget(m_clearFilterBtn);
+				logLayout->addWidget(logToolbar);
+
+				m_logView = new QTextEdit(logWidget);
+				m_logView->setObjectName("logView");
+				m_logView->setReadOnly(true);
+				logLayout->addWidget(m_logView, 1);
+
+				m_rightTabs->addTab(summaryWidget, "  СВОДКА  ");
+				m_rightTabs->addTab(logWidget,     "  ЖУРНАЛ  ");
+
+				vSplit->addWidget(m_rightTabs);
+			}
+
+			vSplit->setStretchFactor(0, 0);  // верх — по контенту
+			vSplit->setStretchFactor(1, 1);  // низ — растягивается
+			vSplit->setSizes({280, 500});
+
+			hSplit->addWidget(vSplit);
+		}
+
+		hSplit->setStretchFactor(0, 0);
+		hSplit->setStretchFactor(1, 1);
+
+		statusBar()->setStyleSheet(
+				"QStatusBar { background:#0e0e0e; color:#303030; font-size:8pt; }");
+		statusBar()->showMessage("  МСВ ТЕСТЕР  ·  готов к работе");
+
+		// Подключения фильтров журнала
+		connect(m_logFilterAll, &QPushButton::clicked, this, [this]() {
+			m_logFilterAll->setChecked(true);
+			m_logFilterWarn->setChecked(false);
+			m_logFilterErr->setChecked(false);
+			m_logLevelFilter = Core::LogLevel::Debug;
+			refreshLogView();
 		});
-        logLabel->setObjectName("sectionLabel");
-        lhl->addWidget(logLabel);
-        lhl->addStretch();
-        ll->addWidget(logHeader);
-
-        m_logView = new QTextEdit(logFrame);
-        m_logView->setObjectName("logView");
-        m_logView->setReadOnly(true);
-        m_logView->setMinimumHeight(120);
-        ll->addWidget(m_logView, 1);
-
-        vSplit->addWidget(logFrame);
-    }
-
-
-
-
-    vSplit->setStretchFactor(0, 3);
-    vSplit->setStretchFactor(1, 1);
-
-    statusBar()->setStyleSheet("QStatusBar { background:#0e0e0e; color:#303030; font-size:8pt; }");
-    statusBar()->showMessage("  МСВ ТЕСТЕР  ·  готов к работе");
-}
-
+		connect(m_logFilterWarn, &QPushButton::clicked, this, [this]() {
+			m_logFilterAll->setChecked(false);
+			m_logFilterWarn->setChecked(true);
+			m_logFilterErr->setChecked(false);
+			m_logLevelFilter = Core::LogLevel::Warning;
+			refreshLogView();
+		});
+		connect(m_logFilterErr, &QPushButton::clicked, this, [this]() {
+			m_logFilterAll->setChecked(false);
+			m_logFilterWarn->setChecked(false);
+			m_logFilterErr->setChecked(true);
+			m_logLevelFilter = Core::LogLevel::Error;
+			refreshLogView();
+		});
+		connect(m_clearFilterBtn, &QPushButton::clicked, this, [this]() {
+			m_stepLogFilter = -1;
+			m_clearFilterBtn->hide();
+			refreshLogView();
+		});
+	}
 // ── Подключение сигналов ──────────────────────────────────────────────────────
 
 void MainWindow::connectSignals()
@@ -716,7 +738,18 @@ void MainWindow::connectSignals()
 			this, [this](int idx) {
 		if(m_logModel) m_logModel->setCurrentStep(idx);
 		}, Qt::DirectConnection);
+
+	if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher)) {
+		connect(msv, &Core::MsvScenarioDispatcher::reportReady,
+				this, &MainWindow::onReportReady);
+		connect(msv, &Core::MsvScenarioDispatcher::usbDriveSelectionRequired,
+				this, &MainWindow::onUsbDriveSelectionRequired);
+
 	}
+
+
+
+}
 
 // ── Слоты ─────────────────────────────────────────────────────────────────────
 
@@ -762,7 +795,7 @@ void MainWindow::onStateChanged(Core::DispatcherState newState)
 
 void MainWindow::onStepStarted(int idx, const Core::StepDescriptor& desc)
 {
-	qDebug() << "mainwiwindow m logmodel" << static_cast<void*>(m_logModel);
+	if (m_liveDataLabel) m_liveDataLabel->hide();
     // Обновить левую панель
     if (idx < m_stepItems.size()) {
         if (idx > 0) m_stepItems[idx - 1]->setActive(false);
@@ -815,6 +848,7 @@ void MainWindow::onStepStarted(int idx, const Core::StepDescriptor& desc)
 
 void MainWindow::onStepFinished(int idx, Core::StepResult result, const QString& details)
 {
+	if (m_liveDataLabel) m_liveDataLabel->hide();
     if (idx < m_stepItems.size())
 	{
 		m_stepItems[idx]->setResult(result);
@@ -893,11 +927,15 @@ void MainWindow::onStepFinished(int idx, Core::StepResult result, const QString&
 						.arg(snap.gpsStatus.isEmpty() ? "—" : snap.gpsStatus)
 						.arg(snap.antennaStatus.isEmpty() ? "—" : snap.antennaStatus);
 				break;
+			case 9:  // USB-носитель
+				params = details;
+				break;
 			default:
 				params = details;
 				break;
 		}
 
+		qDebug() << "cards size:" << m_summaryCards.size() << "idx" << idx;
 		m_summaryCards[idx]->setKeyParams(params);
 		m_summaryCards[idx]->setResult(result, QString{});
 		m_summaryCards[idx]->setExpanded(false);
@@ -951,47 +989,10 @@ void MainWindow::onSnapshotChanged(const Core::DeviceSnapshot& snap)
 
 void MainWindow::onLogEntryAdded(const Core::LogEntry& entry)
 {
-    static const QMap<Core::LogLevel, QString> colors {
-        {Core::LogLevel::Debug,   "#333333"},
-        {Core::LogLevel::Info,    "#505050"},
-        {Core::LogLevel::Warning, "#7a5000"},
-        {Core::LogLevel::Error,   "#7a2020"},
-        {Core::LogLevel::Fatal,   "#9a1010"},
-    };
-    static const QMap<Core::LogLevel, QString> tagColors {
-        {Core::LogLevel::Debug,   "#404040"},
-        {Core::LogLevel::Info,    "#006655"},
-        {Core::LogLevel::Warning, "#cc7700"},
-        {Core::LogLevel::Error,   "#cc3333"},
-        {Core::LogLevel::Fatal,   "#ff2222"},
-    };
+	if (m_stepLogFilter >= 0) return;
+	if (static_cast<int>(entry.level) < static_cast<int>(m_logLevelFilter)) return;
+	appendLogLine(entry);
 
-    const QString bg  = colors   .value(entry.level, "#333333");
-    const QString tag = tagColors.value(entry.level, "#555555");
-
-    static const QMap<Core::LogLevel, QString> tags {
-        {Core::LogLevel::Debug,   "DBG"},
-        {Core::LogLevel::Info,    "INF"},
-        {Core::LogLevel::Warning, "WRN"},
-        {Core::LogLevel::Error,   "ERR"},
-        {Core::LogLevel::Fatal,   "FTL"},
-    };
-
-    const QString html = QStringLiteral(
-        "<span style='color:%1'>"
-        "%2 "
-        "<span style='color:%3'>[%4]</span> "
-        "<span style='color:#2a4a4a'>%5</span> "
-        "%6"
-        "</span>"
-    )
-    .arg(bg)
-    .arg(entry.timestamp.toString("hh:mm:ss.zzz"))
-    .arg(tag, tags.value(entry.level, "???"))
-    .arg(entry.source.leftJustified(22).toHtmlEscaped())
-    .arg(entry.message.toHtmlEscaped());
-
-    m_logView->append(html);
 }
 
 void MainWindow::onScenarioFinished(bool overallPass)
@@ -1003,6 +1004,29 @@ void MainWindow::onScenarioFinished(bool overallPass)
         setPrompt("РЕЗУЛЬТАТ", "Сценарий завершён с ошибками.\nИзделие не прошло проверку.", "#f44336");
         setStatusIndicator("НЕ ГОДЕН", "#f44336");
     }
+}
+
+void MainWindow::onReportReady(const Report::SessionData& session)
+{
+	const QString suggested = QStringLiteral("msv_report_%1.pdf")
+			.arg(session.sessionStart.toLocalTime().toString("yyyyMMdd_HHmmss"));
+
+	const QString path = QFileDialog::getSaveFileName(
+			this, "Сохранить протокол", suggested, "PDF (*.pdf)");
+
+	if (path.isEmpty()) {
+		// Оператор отменил — всё равно завершаем шаг
+		if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher)) {
+			Report::SessionData s = session;
+			msv->saveReport(s, suggested);  // сохранить рядом с exe
+		}
+		return;
+	}
+
+	if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher)) {
+		Report::SessionData s = session;
+		msv->saveReport(s, path);
+	}
 }
 
 // ── Вспомогательные ───────────────────────────────────────────────────────────
@@ -1036,14 +1060,13 @@ void MainWindow::setStatusIndicator(const QString& text, const QString& color)
 void MainWindow::setPrompt(const QString& header, const QString& body,
                             const QString& accentColor)
 {
-    m_promptHeader->setText(header);
-    m_promptHeader->setStyleSheet(QStringLiteral(
-        "color: %1; font-size: 8pt; font-weight: bold; letter-spacing: 2px;")
-        .arg(accentColor));
+	Q_UNUSED(accentColor)
 
-    // Находим QTextEdit по objectName (установлен в buildUi)
-    if (auto* edit = findChild<QTextEdit*>("thePromptEdit"))
-        edit->setPlainText(body);
+	if (m_stepTypeLabel)
+		m_stepTypeLabel->setText(header);
+
+	if (auto* edit = findChild<QTextEdit*>("thePromptEdit"))
+		edit->setPlainText(body);
 }
 
 void MainWindow::onDeviceSelectionRequired(const Msv::Network::WhoIAmResponseList& found)
@@ -1140,19 +1163,12 @@ void MainWindow::onStepProgressUpdate(int stepIndex, const QString& details)
 {
 	if (stepIndex < m_summaryRecords.size())
 		m_summaryRecords[stepIndex].liveDetails = details;
-	else {
-		StepSummaryRecord rec;
-		rec.index       = stepIndex;
-		rec.title       = m_dispatcher->allSteps().value(stepIndex).title;
-		rec.liveDetails = details;
-		m_summaryRecords.append(rec);
+
+	if (m_liveDataLabel) {
+		m_liveDataLabel->setText(details);
+		m_liveDataLabel->show();
 	}
 	rebuildSummary();
-	// Переключить на сводку во время выполнения
-	if(m_viewingStepIndex == -1)
-	{
-		m_rightTabs->setCurrentIndex(1);
-	}
 }
 
 void MainWindow::rebuildSummary()
@@ -1225,6 +1241,10 @@ void MainWindow::onLongRunClicked()
 						   this, [this](const QString& stats) {
 				if (m_longRunDialog) m_longRunDialog->updateStats(stats);
 			});
+			connect(msv, &Core::MsvScenarioDispatcher::longRunTick,
+					this, [this](int el, int tot) {
+				if (m_longRunDialog) m_longRunDialog->updateTimer(el, tot);
+			});
 			connect(msv, &Core::MsvScenarioDispatcher::longRunFinished,
 					this, [this](const Core::LongRunResult& result) {
 						if (m_longRunDialog) m_longRunDialog->showResult(result);
@@ -1238,17 +1258,94 @@ void MainWindow::onLongRunClicked()
 
 void MainWindow::filterLogByStep(int stepIndex)
 {
+	m_stepLogFilter = stepIndex;
+	m_logLevelFilter = Core::LogLevel::Debug;  // показать все уровни шага
+	m_logFilterAll->setChecked(true);
+	m_logFilterWarn->setChecked(false);
+	m_logFilterErr->setChecked(false);
+	m_clearFilterBtn->show();
+	m_rightTabs->setCurrentIndex(1);
+	refreshLogView();
+}
+
+void MainWindow::refreshLogView()
+{
 	if (!m_logModel) return;
 
-	const auto entries = m_logModel->entriesForStep(stepIndex);
 	m_logView->clear();
-	for (const auto& e : entries) {
-		onLogEntryAdded(e);
+
+	const auto all = (m_stepLogFilter >= 0)
+					 ? m_logModel->entriesForStep(m_stepLogFilter)
+					 : m_logModel->entries();
+
+
+	int shown = 0;
+	for (const auto& e : all) {
+		if (static_cast<int>(e.level) < static_cast<int>(m_logLevelFilter))
+			continue;
+		appendLogLine(e);
+		shown++;
 	}
+	qDebug() << "logview blocks:" << m_logView->document()->blockCount();
 	m_logView->verticalScrollBar()->setValue(0);
 
-	if(m_clearFilterBtn) m_clearFilterBtn->show();
+}
 
+void MainWindow::appendLogLine(const Core::LogEntry &entry)
+{
+
+	static const QMap<Core::LogLevel, QString> colors {
+			{Core::LogLevel::Debug,   "#333333"},
+			{Core::LogLevel::Info,    "#505050"},
+			{Core::LogLevel::Warning, "#7a5000"},
+			{Core::LogLevel::Error,   "#7a2020"},
+			{Core::LogLevel::Fatal,   "#9a1010"},
+	};
+	static const QMap<Core::LogLevel, QString> tagColors {
+			{Core::LogLevel::Debug,   "#404040"},
+			{Core::LogLevel::Info,    "#006655"},
+			{Core::LogLevel::Warning, "#cc7700"},
+			{Core::LogLevel::Error,   "#cc3333"},
+			{Core::LogLevel::Fatal,   "#ff2222"},
+	};
+
+	const QString bg  = colors   .value(entry.level, "#333333");
+	const QString tag = tagColors.value(entry.level, "#555555");
+
+	static const QMap<Core::LogLevel, QString> tags {
+			{Core::LogLevel::Debug,   "DBG"},
+			{Core::LogLevel::Info,    "INF"},
+			{Core::LogLevel::Warning, "WRN"},
+			{Core::LogLevel::Error,   "ERR"},
+			{Core::LogLevel::Fatal,   "FTL"},
+	};
+
+	const QString html = QStringLiteral(
+			"<span style='color:%1'>"
+			"%2 "
+			"<span style='color:%3'>[%4]</span> "
+			"<span style='color:#2a4a4a'>%5</span> "
+			"%6"
+			"</span>"
+	)
+			.arg(bg)
+			.arg(entry.timestamp.toString("hh:mm:ss.zzz"))
+			.arg(tag, tags.value(entry.level, "???"))
+			.arg(entry.source.leftJustified(22).toHtmlEscaped())
+			.arg(entry.message.toHtmlEscaped());
+
+	m_logView->append(html);
+}
+
+void MainWindow::onUsbDriveSelectionRequired()
+{
+	UsbDriveSelectionDialog dlg(this);
+	if (dlg.exec() != QDialog::Accepted) {
+		m_dispatcher->abort();
+		return;
+	}
+	if (auto* msv = qobject_cast<Core::MsvScenarioDispatcher*>(m_dispatcher))
+		msv->selectUsbDrive(dlg.selectedDrive());
 }
 
 } // namespace Msv::Ui

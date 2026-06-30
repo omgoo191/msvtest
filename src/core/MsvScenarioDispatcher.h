@@ -10,6 +10,7 @@
 #include "serial/UartMonitor.h"
 #include "report/ReportGenerator.h"
 #include "core/LongRunMonitor.h"
+#include "usb/UsbChecker.h"
 
 namespace Msv::Core {
 
@@ -25,6 +26,11 @@ public:
 	void startLongRun(int durationMinutes);
 	void stopLongRun();
 	void setLongRunActive(bool active) { m_longRunActive = active; }
+	void saveReport(const Report::SessionData& session, const QString& filePath);
+
+	[[nodiscard]] bool hasLongRunResult() const { return m_hasLongRunResult;}
+	[[nodiscard]] const LongRunResult& lastLongResult() const {return m_lastLongRunResult; }
+
 
 
 public slots:
@@ -37,6 +43,8 @@ public slots:
 	void selectPort(const QString& portName, int baudRate);
 
 	void setOperatorName(const QString& name);
+
+	void selectUsbDrive(const QString& driveLetter);
 signals:
     /// Сканирование завершено — показать диалог выбора.
     /// Список может быть пустым (ни одного устройства не найдено).
@@ -46,6 +54,9 @@ signals:
 	void longRunFinished(const Msv::Core::LongRunResult& result);
 	void longRunPortSelectionRequired();
 	void longRunDisplayUpdate(const QString& stats);
+	void reportReady(const Report::SessionData& session);
+	void usbDriveSelectionRequired();
+	void longRunTick(int elapsedSec, int totalSec);
 
 protected:
     void executeStep(int stepIndex) override;
@@ -63,6 +74,7 @@ private:
 	void runReport();
 	void startBackgroundPolling();
 	void stopBackgroundPolling();
+	void runUsbCheck();
 
     IDeviceModel*            m_deviceModel  {nullptr};
     Network::WhoIAmScanner*  m_whoIAmScanner{nullptr};
@@ -83,6 +95,9 @@ private:
 	QTimer*				     m_backgroundPollTimer {nullptr};
 	LongRunMonitor*			 m_longRunMonitor      {nullptr};
 	bool 					 m_longRunActive	   {false};
+	LongRunResult			 m_lastLongRunResult;
+	bool					 m_hasLongRunResult {false};
+	Usb::Manifest			 m_usbManifest;
 
     static constexpr const char* kSrc = "MsvDispatcher";
 

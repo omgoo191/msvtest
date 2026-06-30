@@ -1,4 +1,6 @@
 #include "MsvScenarioDispatcher.h"
+#include <QFileInfo>
+#include <QCoreApplication>
 
 namespace Msv::Core {
 
@@ -26,11 +28,22 @@ MsvScenarioDispatcher::MsvScenarioDispatcher(
 	connect(m_longRunMonitor, &LongRunMonitor::finished,
 			this, [this](const LongRunResult& r){
 		m_longRunActive = false;
+		m_lastLongRunResult = r;
+		m_hasLongRunResult = true;
 		startBackgroundPolling();
 		emit longRunFinished(r);
 	});
+	connect(m_longRunMonitor, &LongRunMonitor::tick,
+			this, &MsvScenarioDispatcher::longRunTick);
 	connect(m_longRunMonitor, &LongRunMonitor::displayUpdate,
 			this, &MsvScenarioDispatcher::longRunDisplayUpdate);
+
+
+	m_usbManifest = Usb::UsbChecker::loadManifest(
+			QCoreApplication::applicationDirPath() + "/usb_manifest.json");
+	if (!m_usbManifest.valid)
+		m_logger->warning(kSrc, QStringLiteral("Манифест usb не загружен: %1").arg(m_usbManifest.loadError));
+
 
 }
 
@@ -51,7 +64,8 @@ void MsvScenarioDispatcher::executeStep(int stepIndex)
 		case 4: runUartMonitor(); break;
 		case 6: runKzMonitoring(); break;
 		case 8: runKzRecovery(); break;
-		case 9: runReport(); break;
+		case 9: runUsbCheck(); break;
+		case 10: runReport(); break;
 		default: ScenarioDispatcher::executeStep(stepIndex); break;
     }
 }
@@ -648,20 +662,8 @@ void MsvScenarioDispatcher::runReport()
 	session.sessionStart = m_sessionStart;
 	session.sessionEnd   = QDateTime::currentDateTimeUtc();
 
-	const QString filename = QStringLiteral("msv_report_%1.txt")
-			.arg(session.sessionStart.toString("yyyyMMdd_HHmmss"));
-
-	const bool ok = m_reportGenerator->generate(
-			session,
-			m_deviceModel->currentSnapshot(),
-			this,
-			filename
-	);
-
-	finishCurrentStep(
-			ok ? StepResult::Pass : StepResult::Fail,
-			ok ? QStringLiteral("сохранён: %1").arg(filename) : "ошибка записи файла"
-	);
+	// Эмитим сигнал чтобы UI показал диалог сохранения
+	emit reportReady(session);
 }
 
 void MsvScenarioDispatcher::setOperatorName(const QString& name)
@@ -669,86 +671,155 @@ void MsvScenarioDispatcher::setOperatorName(const QString& name)
 	m_operatorName = name;
 }
 
-	void MsvScenarioDispatcher::startBackgroundPolling()
+void MsvScenarioDispatcher::startBackgroundPolling()
+{
+	stopBackgroundPolling();
+
+	m_backgroundPollTimer = new QTimer(this);
+	m_backgroundPollTimer->setInterval(5000);
+
+	connect(m_backgroundPollTimer, &QTimer::timeout, this, [this]()
 	{
-		stopBackgroundPolling();
+		// Не мешаем шагам которые сами делают web-запросы
+		const int idx = m_currentIdx;
+		if (idx == 1 || idx == 6 || idx == 8) return;
 
-		m_backgroundPollTimer = new QTimer(this);
-		m_backgroundPollTimer->setInterval(5000);
+		if (!m_deviceModel->isDeviceFound()) return;
 
-		connect(m_backgroundPollTimer, &QTimer::timeout, this, [this]()
-		{
-			// Не мешаем шагам которые сами делают web-запросы
-			const int idx = m_currentIdx;
-			if (idx == 1 || idx == 6 || idx == 8) return;
-
-			if (!m_deviceModel->isDeviceFound()) return;
-
-			const QHostAddress ip = m_deviceModel->currentSnapshot().ipAddress;
-
-			// Используем отдельный клиент чтобы не мешать основному
-			auto* bgClient = new Network::WebClient(m_logger, this);
-
-			connect(bgClient, &Network::WebClient::finished,
-					this, [this, bgClient](const Network::WebClient::Result& res)
-					{
-						bgClient->deleteLater();
-
-						// Обновляем только статус антенны и GPS — не перезаписываем
-						// всю модель чтобы не сбить capturedAt основных шагов
-						Core::WebStatusData data = {};
-						data.syncSource    = res.syncSource;
-						data.syncStatus    = res.syncStatus;
-						data.webTime       = res.webTime;
-						data.antennaStatus = res.antennaStatus;
-						data.gpsStatus     = res.gpsStatus;
-						data.gpsSatellites = res.gpsSatellites;
-						data.rtcValidity   = res.rtcValidity;
-						data.macAddress    = res.macAddress;
-						m_deviceModel->applyWebStatus(data);
-					}, Qt::QueuedConnection);
-
-			connect(bgClient, &Network::WebClient::failed,
-					this, [bgClient](const QString&)
-					{
-						bgClient->deleteLater();
-					}, Qt::QueuedConnection);
-
-			bgClient->setQuiet(true);
-			bgClient->request(ip, "/tags.shtml");
-		});
-
-		m_backgroundPollTimer->start();
-		m_logger->info(kSrc, "Фоновый мониторинг запущен (каждые 5 сек)");
-	}
-
-	void MsvScenarioDispatcher::stopBackgroundPolling()
-	{
-		if (m_backgroundPollTimer) {
-			m_backgroundPollTimer->stop();
-			m_backgroundPollTimer->deleteLater();
-			m_backgroundPollTimer = nullptr;
-			m_logger->info(kSrc, "Фоновый мониторинг остановлен");
-		}
-	}
-
-	void MsvScenarioDispatcher::startLongRun(int durationMinutes)
-	{
-		if (!m_deviceModel->isDeviceFound()) {
-			m_logger->error(kSrc, "Длительный тест: устройство не найдено");
-			return;
-		}
-		m_longRunActive = true;
-		stopBackgroundPolling();
 		const QHostAddress ip = m_deviceModel->currentSnapshot().ipAddress;
-		m_longRunMonitor->start(durationMinutes, ip);
+
+		// Используем отдельный клиент чтобы не мешать основному
+		auto* bgClient = new Network::WebClient(m_logger, this);
+
+		connect(bgClient, &Network::WebClient::finished,
+				this, [this, bgClient](const Network::WebClient::Result& res)
+				{
+					bgClient->deleteLater();
+
+					// Обновляем только статус антенны и GPS — не перезаписываем
+					// всю модель чтобы не сбить capturedAt основных шагов
+					Core::WebStatusData data = {};
+					data.syncSource    = res.syncSource;
+					data.syncStatus    = res.syncStatus;
+					data.webTime       = res.webTime;
+					data.antennaStatus = res.antennaStatus;
+					data.gpsStatus     = res.gpsStatus;
+					data.gpsSatellites = res.gpsSatellites;
+					data.rtcValidity   = res.rtcValidity;
+					data.macAddress    = res.macAddress;
+					m_deviceModel->applyWebStatus(data);
+				}, Qt::QueuedConnection);
+
+		connect(bgClient, &Network::WebClient::failed,
+				this, [bgClient](const QString&)
+				{
+					bgClient->deleteLater();
+				}, Qt::QueuedConnection);
+
+		bgClient->setQuiet(true);
+		bgClient->request(ip, "/tags.shtml");
+	});
+
+	m_backgroundPollTimer->start();
+	m_logger->info(kSrc, "Фоновый мониторинг запущен (каждые 5 сек)");
+}
+
+void MsvScenarioDispatcher::stopBackgroundPolling()
+{
+	if (m_backgroundPollTimer) {
+		m_backgroundPollTimer->stop();
+		m_backgroundPollTimer->deleteLater();
+		m_backgroundPollTimer = nullptr;
+		m_logger->info(kSrc, "Фоновый мониторинг остановлен");
+	}
+}
+
+void MsvScenarioDispatcher::startLongRun(int durationMinutes)
+{
+	if (!m_deviceModel->isDeviceFound()) {
+		m_logger->error(kSrc, "Длительный тест: устройство не найдено");
+		return;
+	}
+	m_longRunActive = true;
+	stopBackgroundPolling();
+	const QHostAddress ip = m_deviceModel->currentSnapshot().ipAddress;
+	m_longRunMonitor->start(durationMinutes, ip);
+}
+
+void MsvScenarioDispatcher::stopLongRun()
+{
+	m_longRunActive = false;
+	m_longRunMonitor->stop();
+	startBackgroundPolling();
+}
+
+void MsvScenarioDispatcher::saveReport(const Report::SessionData& session,
+									   const QString& filePath)
+{
+	const Core::LongRunResult* lr = m_hasLongRunResult
+									? &m_lastLongRunResult : nullptr;
+
+	const bool ok = m_reportGenerator->generatePdf(
+			session,
+			m_deviceModel->currentSnapshot(),
+			this,
+			lr,
+			filePath
+	);
+
+	finishCurrentStep(
+			ok ? StepResult::Pass : StepResult::Fail,
+			ok ? QStringLiteral("сохранён: %1").arg(QFileInfo(filePath).fileName())
+			   : "ошибка записи PDF"
+	);
+}
+
+void MsvScenarioDispatcher::runUsbCheck()
+{
+	m_logger->info(kSrc, "Запрос выбора USB-носителя...");
+	emit usbDriveSelectionRequired();
+}
+
+void MsvScenarioDispatcher::selectUsbDrive(const QString& driveLetter)
+{
+	m_logger->info(kSrc, QStringLiteral("Проверка диска %1...").arg(driveLetter));
+
+	const auto result = Usb::UsbChecker::checkDrive(driveLetter, m_usbManifest);
+
+	if (!result.driveAccessible) {
+		finishCurrentStep(StepResult::Fail, result.error);
+		return;
 	}
 
-	void MsvScenarioDispatcher::stopLongRun()
-	{
-		m_longRunActive = false;
-		m_longRunMonitor->stop();
-		startBackgroundPolling();
+	QStringList issues;
+	for (const auto& f : result.fileResults) {
+		if (!f.exists) {
+			issues << QStringLiteral("%1: отсутствует").arg(f.relativePath);
+		} else if (!f.sizeOk) {
+			issues << QStringLiteral("%1: неверный размер").arg(f.relativePath);
+		} else if (!f.crcOk) {
+			issues << QStringLiteral("%1: CRC не совпадает").arg(f.relativePath);
+		}
 	}
+
+	if (!result.markerFileName.isEmpty() && !result.markerFilePresent)
+		issues << QStringLiteral("%1: отсутствует").arg(result.markerFileName);
+
+	StepResult res;
+	QString detail;
+
+	if (issues.isEmpty()) {
+		res = StepResult::Pass;
+		detail = QStringLiteral("Диск %1: все файлы корректны (%2 шт), %3")
+				.arg(driveLetter)
+				.arg(result.fileResults.size())
+				.arg(result.markerFilePresent ? "маркер найден" : "маркер не проверялся");
+	} else {
+		res = StepResult::Fail;
+		detail = issues.join("; ");
+	}
+
+	finishCurrentStep(res, detail);
+}
 
 } // namespace Msv::Core

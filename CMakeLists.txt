@@ -18,8 +18,9 @@ set(CMAKE_AUTORCC ON)
 
 # ── Qt компоненты ──────────────────────────────────────────────────────────────
 find_package(Qt6 REQUIRED COMPONENTS
-    Core Gui Widgets Network SerialPort
+    Core Gui Widgets Network SerialPort PrintSupport
 )
+find_package(ZLIB REQUIRED)
 
 # ── Предупреждения ─────────────────────────────────────────────────────────────
 if(MSVC)
@@ -64,6 +65,9 @@ set(SOURCES
     src/ui/LongRunSetupDialog.cpp
 
     src/ui/StepSummaryCard.cpp
+
+    src/ui/UsbDriveSelectionDialog.cpp
+    src/usb/UsbChecker.cpp
 )
 
 qt6_add_executable(MsvTester ${SOURCES})
@@ -71,7 +75,7 @@ qt6_add_executable(MsvTester ${SOURCES})
 target_include_directories(MsvTester PRIVATE src)
 
 target_link_libraries(MsvTester PRIVATE
-    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::SerialPort
+    Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Network Qt6::SerialPort Qt6::PrintSupport ZLIB::ZLIB
 )
 
 install(TARGETS MsvTester RUNTIME DESTINATION bin)

@@ -118,6 +118,8 @@ signals:
 
 	void displayUpdate(const QString& stats);
 
+	void tick(int elapsedSec, int totalSec);
+
 private slots:
     void onPollTick();
     void onFinished();
@@ -166,6 +168,8 @@ private:
     SyncStatus       m_lastSyncStatus {SyncStatus::Unknown};
 
 	QTimer*			 m_displayTimer {nullptr};
+
+	QTimer* 		 m_tickTimer {nullptr};
 
     static constexpr const char* kSrc = "LongRunMonitor";
 };

@@ -9,6 +9,9 @@
 #include "core/IScenarioDispatcher.h"
 #include "ui/LongRunSetupDialog.h"
 #include "ui/StepSummaryCard.h"
+#include "core/ILogger.h"
+#include "report/ReportGenerator.h"
+#include "ui/UsbDriveSelectionDialog.h"
 
 namespace Msv::Core {
     class IScenarioDispatcher;
@@ -63,6 +66,8 @@ private slots:
 	void onPortSelectionRequired();
 	void onStepProgressUpdate(int stepIndex, const QString& details);
 	void onLongRunClicked();
+	void onReportReady(const Report::SessionData& session);
+	void onUsbDriveSelectionRequired();
 
 private:
     void buildUi();
@@ -73,6 +78,8 @@ private:
     void setPrompt(const QString& header, const QString& body, const QString& accentColor);
 	void rebuildSummary();
 	void filterLogByStep(int stepIndex);
+	void refreshLogView();
+	void appendLogLine(const Core::LogEntry& entry);
 
     // ── Top bar ───────────────────────────────────────────────────────────────
     QLabel*       m_deviceLabel   {nullptr};
@@ -90,6 +97,12 @@ private:
     QLabel*       m_stepTypeLabel {nullptr};
     QLabel*       m_promptHeader  {nullptr};
     QLabel*       m_promptBody    {nullptr};
+	QLabel*  	  m_liveDataLabel {nullptr};
+	QPushButton*  m_logFilterAll  {nullptr};
+	QPushButton*  m_logFilterWarn {nullptr};
+	QPushButton*  m_logFilterErr  {nullptr};
+	Core::LogLevel m_logLevelFilter {Core::LogLevel::Debug};
+	int 		  m_stepLogFilter {-1};
 
     // ── Buttons ───────────────────────────────────────────────────────────────
     QPushButton*  m_startBtn      {nullptr};
